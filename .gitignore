@@ -1,0 +1,14 @@
+*.txt
+*.pyc
+__pycache__
+*.csv
+*.npy
+*.egg-info
+*.json
+*.log
+*.npz
+*.png
+*.pkl
+*.data
+*.zip
+*.7z

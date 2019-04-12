@@ -12,6 +12,10 @@ class Model:
     def reset(self, np_random=npr):
         self.weights = np_random.normal(size=self.weights.shape)
 
+    @property
+    def size(self):
+        return self.weights.size
+
     def forward(self, features):
         return softmax(features @ self.weights)
 

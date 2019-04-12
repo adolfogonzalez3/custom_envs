@@ -1,6 +1,5 @@
 """classic Acrobot task"""
 
-
 import numpy as np
 
 from gym import core, spaces
@@ -12,26 +11,25 @@ from custom_envs import load_data
 from custom_envs.utils import shuffle, to_onehot, softmax, cross_entropy
 from custom_envs.model import Model
 
-LOG_EVERY = 100
+LOG_EVERY = 1000
 # SOURCE:
 # https://github.com/rlpy/rlpy/blob/master/rlpy/Domains/Acrobot.py
 
-
-
-class OptLR(core.Env):
+class MultiOptimize(core.Env):
 
     """
     Summary:
     The optimize environment requires an agent to reduce the 
     objective function of a target neural network on some dataset by changing
-    the global learning rate. The action of the agent is used as the global
-    learning rate for a vanilla gradient descent algorithm. 
+    the weights. The action of the agent is added to the current weights of
+    the target neural network. 
 
     Target Network:
     The target network is a simple multiclass softmax classifier. The 
     neural network operations are written with numpy.
 
-    action_space: Produces a single real number used as the learning rate.
+    action_space: The number of dimensions is equal to the number of
+                  parameters in the target network.
     observation_space: The observation consists of the current parameters of
                        the target network, the current objective, and the
                        current gradient of the objective with respect to
@@ -42,7 +40,7 @@ class OptLR(core.Env):
         'render.modes': []
     }
 
-    def __init__(self, log_file=None):
+    def __init__(self, columnwise=True):
         data = load_data()
         features, labels = np.hsplit(data, [-1])
         self.features = features
@@ -53,12 +51,12 @@ class OptLR(core.Env):
         self.obj_list = np.zeros(self.H)
         self.grad_list = np.zeros((self.H, self.feature_size, num_of_labels))
         self.W_list = np.zeros_like(self.grad_list)
-        #self.N = self.obj_list.size + self.grad_list.size + self.w.size 
+        # self.N = self.obj_list.size + self.grad_list.size + self.w.size
         self.N = 2*self.model.size + 1
         self.observation_space = spaces.Box(low=-1e8, high=1e8, 
                                             shape=(self.N,), dtype=np.float32)
         self.action_space = spaces.Box(low=-1e8, high=1e8,
-                                       shape=(1,),
+                                       shape=(self.model.size,),
                                        dtype=np.float32)
         self.steps = 1
         self.seed()
@@ -103,18 +101,16 @@ class OptLR(core.Env):
         labels = self.labels
         features = self.features
 
-        new_weights = self.model.weights - a*self.grad_list[I-1]
-        self.model.set_weights(new_weights)
+        self.model.set_weights(self.model.weights - a.reshape((-1, self.num_of_labels)))
         objective, gradient, accuracy = self.model.compute_backprop(features, labels)
-        
+
         self.obj_list[I] = (objective - self.obj_list[I-1]) / (self.obj_list[I-1] + 0.1)
-        self.grad_list[I] = gradient #/ (np.abs(self.grad_list[I-1])+1)
-        grad = gradient / (np.abs(self.grad_list[I-1])+1)
+        self.grad_list[I] = gradient / (np.abs(self.grad_list[I-1])+1)
         self.W_list[I] = np.abs(self.W_list[I-1] - self.W_list[I-2])/(np.abs(self.W_list[I] - self.W_list[I-1]) + 0.1)
         self.steps += 1
-        
+
         state = np.concatenate([self.W_list[I].ravel(), self.obj_list[[I]],
-                                grad.ravel()])
+                                self.grad_list[I].ravel()])
         terminal = self._terminal()
         reward = -objective
         self.rewards.append(reward)
@@ -135,6 +131,6 @@ if __name__ == '__main__':
     from stable_baselines.common.policies import MlpPolicy
     from stable_baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
     from stable_baselines.common.vec_env import DummyVecEnv
-    env = DummyVecEnv([OptLR])
+    env = DummyVecEnv([Optimize])
     agent = PPO2(MlpPolicy, env)
     agent.learn(total_timesteps=2**20)
