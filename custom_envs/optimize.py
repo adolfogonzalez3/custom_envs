@@ -53,9 +53,9 @@ class Optimize(core.Env):
         self.W_list = np.zeros_like(self.grad_list)
         #self.N = self.obj_list.size + self.grad_list.size + self.w.size 
         self.N = 2*self.model.size + 1
-        self.observation_space = spaces.Box(low=-1e8, high=1e8, 
+        self.observation_space = spaces.Box(low=-1e3, high=1e3, 
                                             shape=(self.N,), dtype=np.float32)
-        self.action_space = spaces.Box(low=-1e8, high=1e8,
+        self.action_space = spaces.Box(low=-1e3, high=1e3,
                                        shape=(self.model.size,),
                                        dtype=np.float32)
         self.steps = 1

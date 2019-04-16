@@ -1,25 +1,57 @@
 
+from enum import Enum
 
 from collections import deque, namedtuple
-from multiprocessing import Queue
+from multiprocessing import Queue, Pipe
+from multiprocessing.connection import wait
 from time import sleep
 
 SpawnData = namedtuple('SpawnData', ['ID', 'data'])
 SpawnMailbox = namedtuple('SpawnMailbox', ['ID', 'mailbox'])
 
+class MailboxMsg(Enum):
+    ERROR = 0
+    EMPTY = 1
+    CLOSE = 2
 
-class MailboxSpawn(object):
-    
-    def __init__(self, id, main_mailbox, spawn_mailbox):
-        self.id = id
-        self._main_mailbox = main_mailbox
-        self._spawn_mailbox = spawn_mailbox
-        
+class Mailbox:
+    def __init__(self, pipe):
+        self.pipe = pipe
+        self.data = MailboxMsg.EMPTY
+
     def append(self, data):
-        self._main_mailbox.put(SpawnData(self.id, data))
-        
-    def get(self):
-        return self._spawn_mailbox.get()
+        self.pipe.send(data)
+
+    def peek(self, timeout=None):
+        if self.data is MailboxMsg.EMPTY:
+            if self.poll(timeout=timeout):
+                data = self.pipe.recv()
+                self.data = data
+            else:
+                raise EOFError('No objects in Pipe.')
+        return self.data
+
+    def poll(self, timeout=None):
+        return self.pipe.poll(timeout=timeout)
+
+    def get(self, timeout=None):
+        data = self.peek(timeout=timeout)
+        self.data = MailboxMsg.EMPTY
+        return data
+
+    def close(self):
+        self.pipe.send(MailboxMsg.CLOSE)
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, a, b, c):
+        self.close()
+
+def create_mailbox():
+    host, client = Pipe(True)
+    return Mailbox(host), Mailbox(client)
+
 
 class MailboxInSync(object):
     '''A mailbox which acts as a consumer for multiple produceers.
@@ -30,47 +62,63 @@ class MailboxInSync(object):
     '''
     
     def __init__(self):
-        self._instance_ids = []
-        self._instance_mailboxes = []
-        self.id_counter = 0
-        self._main_mailbox = Queue()
+        self.mailboxes = []
         
     def spawn(self):
-        new_id = self.id_counter
-        new_mailbox = Queue()
-        self._instance_mailboxes.append(SpawnMailbox(new_id, new_mailbox))
-        self._instance_ids.append(new_id)
-        self.id_counter += 1
-        return MailboxSpawn(new_id, self._main_mailbox, new_mailbox)
+        owner, client = create_mailbox()
+        self.mailboxes.append(owner)
+        return client
+
+    def is_broken(self):
+        for mbox in self.mailboxes:
+            if mbox.peek() is MailboxMsg.CLOSE:
+                return True
+        #broken_pipe_list = [mbox.peek() is MailboxMsg.CLOSE
+        #                    for mbox in self.mailboxes]
+        return True
+
+    def poll(self, timeout=None):
+        return all([mailbox.poll(timeout) for mailbox in self.mailboxes])
         
     def append(self, data, unequal=False):
-        if unequal is False and len(data) != len(self._instance_mailboxes):
-            print(len(data))
-            print(len(self._instance_mailboxes))
-            raise RuntimeWarning(("The length of data isn't equal to the number"
+        if unequal is False and len(data) != len(self.mailboxes):
+            raise RuntimeError(("The length of data isn't equal to the number"
                                   " of spawned instances."))
-            print(len(data), len(self._instance_mailboxes))
+        for mailbox, data in zip(self.mailboxes, data):
+            mailbox.append(data)
         
-        {i for i, _ in data}
-        for spawned_mailbox, d in zip(self._instance_mailboxes, data):
-            spawned_mailbox.mailbox.put(d)
-        
-    def get(self):
-        spawn_items = []
-        while len(spawn_items) != len(self._instance_ids):
-            spawn_items.append(self._main_mailbox.get())
-        spawn_items = sorted(spawn_items, key=lambda x: x[0])
-        return [it.data for it in spawn_items]
+    def _unsafe_get(self):
+        return [mailbox.get() for mailbox in self.mailboxes]
+
+    def get(self, timeout=None):
+        is_ready = True
+        for mailbox in self.mailboxes:
+            is_ready = is_ready and mailbox.poll(timeout)
+        if is_ready:
+            return self._unsafe_get()
+        else:
+            return None
+
+    def close(self):
+        self.append([True]*len(self.mailboxes))
+        for mailbox in self.mailboxes:
+            mailbox.close()
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, a, b, c):
+        pass
         
 if __name__ == '__main__':
     from concurrent.futures import ThreadPoolExecutor
-    
+
     def task(L):
         ID = L.get()
-        print(ID)
+        print("ID: ", ID)
         L.append(ID)
         ID = L.get()
-        print(ID)
+        print("Next ID: ", ID)
         L.append(ID)
         
     mailbox = MailboxInSync()

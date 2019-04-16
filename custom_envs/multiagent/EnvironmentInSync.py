@@ -1,4 +1,5 @@
 
+from copy import deepcopy
 from collections import namedtuple
 from enum import Enum
 
@@ -6,7 +7,7 @@ from gym import Env
 from gym.spaces import Box
 import numpy as np
 
-from MailboxInSync import MailboxInSync
+from custom_envs.multiagent.MailboxInSync import MailboxInSync
 
 class RequestType(Enum):
     STEP = 0
@@ -16,20 +17,34 @@ class RequestType(Enum):
 
 
 def segment_space(space, segments):
-    if issubclass(space, Box):
-        n = np.prod(space) / segments
-        return [Box(space.low, space.high, shape=(n,), dtype=space.dtype)
-                for i in range(segments)]
+    '''
+    Divide a space into several segments.
 
-
+    :param space: (A subclass of gym.Space) The space to segment
+    :param title: (int) The number of segments.
+    '''
+    if isinstance(space, Box):
+        n = np.prod(space.shape) // segments
+        n_leftover = int(np.ceil(np.prod(space.shape) / segments))
+        low = np.min(space.low)
+        high = np.max(space.high)
+        leftover = [Box(low, high, shape=(n_leftover,), dtype=space.dtype)]
+        return [Box(low, high, shape=(n,), dtype=space.dtype)
+                for i in range(segments-1)] + leftover
 
 EnvRequest = namedtuple('EnvRequest', ['type', 'data'])
 
 class EnvSpawn(Env):
+    '''
+    A class that is used to send and receive messages from the main Env.
+    '''
     def __init__(self, observation_space, action_space, mailbox):
         self._mailbox = mailbox
         self.action_space = action_space
         self.observation_space = observation_space
+
+    def start_connection(self):
+        self._mailbox.append(EnvRequest(RequestType.START, None))
         
     def step(self, action):
         request = EnvRequest(RequestType.STEP, action)
@@ -51,9 +66,6 @@ class EnvSpawn(Env):
         request = EnvRequest(RequestType.CLOSE, None)
         self._mailbox.append(request)
 
-    def __del__(self):
-        self.close()
-
 
 class EnvironmentInSync:
     '''A class to use OpenAi algorithms.'''
@@ -68,25 +80,23 @@ class EnvironmentInSync:
                          for obs_space, act_space in
                          zip(self.observation_spaces, self.action_spaces)]
         
-        
-    def handle_requests(self):
-        obs = rewards = dones = info = None
-        requests = self.mailbox.get()
-        if all([r.type == RequestType.RESET for r in requests]):
+    def handle_requests(self, timeout=None):
+        requests = self.mailbox.get(timeout=timeout)
+        if requests is None:
+            return None
+        elif all([r.type == RequestType.RESET for r in requests]):
             obs = self.env.reset()
-            self.mailbox.append(obs)
+            self.mailbox.append([obs]*len(self.sub_envs))
             return self.handle_requests()
         elif all([r.type == RequestType.CLOSE for r in requests]):
             return None
         elif all([r.type == RequestType.STEP for r in requests]):
             action = np.concatenate([r.data for r in requests])
-            action = action.reshape(self.action_spaces.shape)
-            obs, reward, done, info = self.env.step(action)
-            agent_data = [[obs, reward, done, None]]*len(self.sub_envs)
-            info = info if len(info) == len(dones) else [info]*len(dones)
-            agent_data = list(zip(obs, rewards, dones, info))
+            action = action.reshape(self.env.action_space.shape)
+            data = self.env.step(action)
+            agent_data = [deepcopy(data) for _ in enumerate(self.sub_envs)]
             self.mailbox.append(agent_data)
-            return obs, rewards, dones, info
+            return data
         else:
             raise RuntimeError('Requests are inconsistent.')
         
@@ -99,3 +109,10 @@ class EnvironmentInSync:
         
     def __iter__(self):
         return self
+
+    def close(self):
+        self.mailbox.close()
+        self.env.close()
+
+    def __enter__(self):
+        pass

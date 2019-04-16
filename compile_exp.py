@@ -1,17 +1,38 @@
 
 import os
 from glob import glob
-from collections import defaultdict
+from pathlib import Path
+from collections import defaultdict, Counter
+from concurrent.futures import ThreadPoolExecutor
+
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
-from stable_baselines.results_plotter import load_results, ts2xy, plot_results, plot_results_by_task
 
 def load_expr(path):
-    experiment_names = os.listdir(path)
-    dirs = [os.path.join(path, expr_name) for expr_name in experiment_names]
-    return [load_results(d) for d in dirs], experiment_names
+    '''Load experiment in path.'''
+    path = Path(path)
+    #print(path.name.rsplit('-', 1))
+    monitor_name, seed = path.name.rsplit('-', 1)
+    alg, _, learning_rate, _, gamma = monitor_name.split('_')
+    results = pd.read_csv(path / 'monitor.csv', skiprows=1)
+    results['alg'] = alg
+    results['learning_rate'] = learning_rate
+    results['gamma'] = gamma
+    results['seed'] = seed
+    return results
+
+def load_exprs(path):
+    '''Load all experiments under path.'''
+    path = Path(path)
+    exper_names = os.listdir(path)
+    expr_paths = [path / ename for ename in exper_names]
+    with ThreadPoolExecutor() as executor:
+        expr_dfs = executor.map(load_expr, expr_paths)
+    return pd.concat(expr_dfs), exper_names
+
 
 def movingAverage(values, window):
     """
@@ -125,14 +146,22 @@ def plot_expr(experiment, experiment_name):
     plt.legend()
     plt.show()
 
+def get_experiments(path):
+    experiments = os.listdir(path)
+    expr_names = [e.rsplit('-', 1)[0] for e in experiments]
+    return Counter(expr_names)
 
 if __name__ == '__main__':
     import argparse
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("path", help="The path to the files.")
     ARGS = PARSER.parse_args()
-    PATH = ARGS.path
-    experiments, experiment_names = load_expr(PATH)
-    print(experiment_names[-3])
-    plot_expr(experiments[-3], experiment_names[-3])
-    #plot_each_expr_3d(experiments, experiment_names)
+    PATH = Path(ARGS.path)
+    #expr_dict = get_experiments(PATH)
+    #print(expr_dict)
+    if PATH.is_dir():
+        print('Loading...')
+        expr_df, experiment_names = load_exprs(PATH)
+        expr_df.reset_index(inplace=True)
+        print('Saving...')
+        expr_df.to_pickle('{}.pkl'.format(PATH.name))

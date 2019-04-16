@@ -9,32 +9,33 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 
-def plot_hyperparamsearch_alg():
-    df = pd.read_csv('results_Optimize-v0.csv', index_col=0)
+def plot_hyperparamsearch_alg(df):
+    '''Plot experiments contained in dataframe.'''
 
     learning_rates = sorted(df['learning_rate'].unique())
     gammas = sorted(df['gamma'].unique())
     algs = sorted(df['alg'].unique())
-
     X = []
     Y = []
     Z = []
     test = []
+    result_df = df.groupby(['learning_rate', 'gamma', 'alg', 'index']).mean()
     for alg, lr, g in product(algs, learning_rates, gammas):
-        result = df.query('learning_rate == @lr & gamma == @g & alg == @alg')
-        result = result.groupby('index').mean()
+        result = result_df.loc[(lr, g, alg, pd.IndexSlice['index', :])]
         metric = result['objective']
-        #metric = metric.fillna(100)
-        Z.append(metric.mean())
         test.append(alg)
         X.append(lr)
         Y.append(g)
+        Z.append(metric.mean())
     
-    X = np.array(X).reshape((len(algs), len(learning_rates), len(gammas)))
-    Y = np.array(Y).reshape((len(algs), len(learning_rates), len(gammas)))
-    Z = np.array(Z).reshape((len(algs), len(learning_rates), len(gammas)))
+    grid_shape = (len(algs), len(learning_rates), len(gammas))
+    X = np.array(X, dtype=np.float).reshape(grid_shape)
+    Y = np.array(Y, dtype=np.float).reshape(grid_shape)
+    Z = np.array(Z, dtype=np.float).reshape(grid_shape)
+    metric_min = np.min(Z)
+    metric_max = np.max(Z)
 
-    for i in algs:
+    for i, name in enumerate(algs):
         alg = None
         if i == 0:
             alg = 'PPO'
@@ -45,11 +46,13 @@ def plot_hyperparamsearch_alg():
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         #ax.scatter(learning_rate_list, gamma_list, steps)
+        print(X[i], Y[i], Z[i])
         ax.plot_surface(X[i], Y[i], Z[i], cmap=None, linewidth=0,
                         antialiased=False)
         ax.set_xlabel('Learning Rate')
         ax.set_ylabel('Gamma')
         ax.set_zlabel('Mean Loss')
+        ax.set_zlim(metric_min, metric_max)
         ax.set_title('Model: {}'.format(alg))
         plt.show()
 
@@ -69,10 +72,7 @@ def plot_hyperparamsearch_LR():
     plt.ylabel('Loss')
     plt.show()
 
-def plot_best():
-    df = pd.read_csv('results_Optimize-v0.csv', index_col=0)
-    df_lr = pd.read_csv('results_lr.csv', index_col=0)
-
+def plot_best(df, df_lr):
     learning_rates_lr = sorted(df_lr['learning_rate'].unique())
 
     best_lr = None
@@ -117,4 +117,15 @@ def plot_best():
 
 
 if __name__ == '__main__':
-    plot_hyperparamsearch_LR()
+    import argparse
+    PARSER = argparse.ArgumentParser()
+    PARSER.add_argument("file_name", help="The name of the file to load.")
+    ARGS = PARSER.parse_args()
+    FILENAME = ARGS.file_name
+
+    print('Reading...')
+    df = pd.read_pickle(FILENAME)
+    print('Plotting...')
+    plot_hyperparamsearch_alg(df)
+    #df_lr = pd.read_csv('results_lr.csv', index_col=0)
+    #plot_hyperparamsearch_LR()
