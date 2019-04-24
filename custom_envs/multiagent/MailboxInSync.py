@@ -2,12 +2,15 @@
 from enum import Enum
 
 from collections import deque, namedtuple
+import multiprocessing as mp
 from multiprocessing import Queue, Pipe
 from multiprocessing.connection import wait
 from time import sleep
 
 SpawnData = namedtuple('SpawnData', ['ID', 'data'])
 SpawnMailbox = namedtuple('SpawnMailbox', ['ID', 'mailbox'])
+
+from custom_envs.multiagent import PipeQueue
 
 class MailboxMsg(Enum):
     ERROR = 0
@@ -48,9 +51,11 @@ class Mailbox:
     def __exit__(self, a, b, c):
         self.close()
 
-def create_mailbox():
-    host, client = Pipe(True)
-    return Mailbox(host), Mailbox(client)
+def create_mailbox(manager):
+    host = PipeQueue(manager.Queue(), manager.Queue())
+    #host, client = Pipe(True)
+    #return Mailbox(host), Mailbox(client)
+    return Mailbox(host), Mailbox(host.reverse())
 
 
 class MailboxInSync(object):
@@ -63,9 +68,10 @@ class MailboxInSync(object):
     
     def __init__(self):
         self.mailboxes = []
+        self.manager = mp.Manager()
         
     def spawn(self):
-        owner, client = create_mailbox()
+        owner, client = create_mailbox(self.manager)
         self.mailboxes.append(owner)
         return client
 
@@ -112,29 +118,23 @@ class MailboxInSync(object):
         
 if __name__ == '__main__':
     from concurrent.futures import ThreadPoolExecutor
+    from time import time
+
+    NUM_STEPS = 10**2
 
     def task(L):
-        ID = L.get()
-        print("ID: ", ID)
-        L.append(ID)
-        ID = L.get()
-        print("Next ID: ", ID)
-        L.append(ID)
+        for i in range(NUM_STEPS):
+            L.append(i)
+            ID = L.get()
         
     mailbox = MailboxInSync()
     with ThreadPoolExecutor() as executor:
-        executor.submit(task, mailbox.spawn())
-        executor.submit(task, mailbox.spawn())
-        executor.submit(task, mailbox.spawn())
-        executor.submit(task, mailbox.spawn())
-        executor.submit(task, mailbox.spawn())
-        
-        mailbox.append([5-i for i in range(5)])
-        
-        data = mailbox.get()
-        print(data)
-        
-        mailbox.append([i*2 for i in range(5)])
-        
-        data = mailbox.get()
-        print(data)
+        executor.map(task, [mailbox.spawn() for _ in range(3)])
+        begin = time()
+        for _ in range(NUM_STEPS):
+            data = mailbox.get()
+            mailbox.append([i for i in range(3)])
+    time_elapsed = time() - begin
+    time_per_transfer = time_elapsed / NUM_STEPS
+    print(('Done in {:.6} seconds or {:.6} seconds per '
+           'transfer.').format(time_elapsed, time_per_transfer))

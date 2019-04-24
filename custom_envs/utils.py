@@ -1,12 +1,13 @@
 
-from threading import Thread
+from pathlib import Path
 from itertools import zip_longest
-from multiprocessing import Process
 
+import gym
+import numexpr
 import numpy as np
 import numpy.random as npr
-import numexpr
 
+from stable_baselines.bench import Monitor
 
 def shuffle(*args, np_random=npr):
     length = len(args[0])
@@ -50,3 +51,11 @@ def to_onehot(x):
     onehot = np.zeros((len(x), num_of_labels))
     onehot[np.arange(len(x)), x] = 1
     return onehot, num_of_labels
+
+def create_env(env_name, log_dir, num_of_envs=1):
+    log_dir = Path(log_dir)
+    envs = [gym.make(env_name) for _ in range(num_of_envs)]
+    envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
+                    info_keywords=('objective', 'accuracy'))
+            for i, env in enumerate(envs)]
+    return envs

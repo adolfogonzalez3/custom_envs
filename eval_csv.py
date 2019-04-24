@@ -46,7 +46,6 @@ def plot_hyperparamsearch_alg(df):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         #ax.scatter(learning_rate_list, gamma_list, steps)
-        print(X[i], Y[i], Z[i])
         ax.plot_surface(X[i], Y[i], Z[i], cmap=None, linewidth=0,
                         antialiased=False)
         ax.set_xlabel('Learning Rate')

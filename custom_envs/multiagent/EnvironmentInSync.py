@@ -66,6 +66,9 @@ class EnvSpawn(Env):
         request = EnvRequest(RequestType.CLOSE, None)
         self._mailbox.append(request)
 
+    def __call__(self):
+        return self
+
 
 class EnvironmentInSync:
     '''A class to use OpenAi algorithms.'''
@@ -83,7 +86,7 @@ class EnvironmentInSync:
     def handle_requests(self, timeout=None):
         requests = self.mailbox.get(timeout=timeout)
         if requests is None:
-            return None
+            return []
         elif all([r.type == RequestType.RESET for r in requests]):
             obs = self.env.reset()
             self.mailbox.append([obs]*len(self.sub_envs))

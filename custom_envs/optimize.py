@@ -60,9 +60,6 @@ class Optimize(core.Env):
                                        dtype=np.float32)
         self.steps = 1
         self.seed()
-        self.rewards = []
-        self.running_rewards = []
-        self.running_acc = []
         self.num_of_labels = num_of_labels
         self.global_steps = 0
         self.seed_no = 0
@@ -73,23 +70,11 @@ class Optimize(core.Env):
         return [seed]
 
     def reset(self):
-        if self.rewards:
-            accuracy = self.model.compute_accuracy(self.features, self.labels)
-            self.running_acc.append(accuracy)
-            self.running_rewards.append(np.sum(self.rewards))
-        if len(self.running_rewards) >= LOG_EVERY:
-            avg_rew = np.mean(self.running_rewards)
-            avg_acc = np.mean(self.running_acc)
-            print(('Mean Reward {:+9.6f} and Mean Accuracy {:3.2f} '
-                   'for past {:3d} Exp.').format(avg_rew, avg_acc, LOG_EVERY))
-            self.running_rewards = []
-            self.running_acc = []
         shuffle(self.features, self.labels, np_random=self.np_random)
         self.obj_list.fill(0)
         self.grad_list.fill(0)
         self.W_list.fill(0)
         self.steps = 1
-        self.rewards = []
         I = 0
         self.model.reset(self.np_random)
         return np.concatenate([self.W_list[I].ravel(), self.obj_list[[I]],
@@ -113,7 +98,6 @@ class Optimize(core.Env):
                                 self.grad_list[I].ravel()])
         terminal = self._terminal()
         reward = -objective
-        self.rewards.append(reward)
         return state, reward, terminal, {'objective': objective, 'accuracy': accuracy}
 
     def _terminal(self):
@@ -132,5 +116,5 @@ if __name__ == '__main__':
     from stable_baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
     from stable_baselines.common.vec_env import DummyVecEnv
     env = DummyVecEnv([Optimize])
-    agent = PPO2(MlpPolicy, env)
-    agent.learn(total_timesteps=2**20)
+    agent = PPO2(MlpPolicy, env, verbose=1)
+    agent.learn(total_timesteps=10**5)

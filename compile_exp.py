@@ -17,7 +17,7 @@ def load_expr(path):
     #print(path.name.rsplit('-', 1))
     monitor_name, seed = path.name.rsplit('-', 1)
     alg, _, learning_rate, _, gamma = monitor_name.split('_')
-    results = pd.read_csv(path / 'monitor.csv', skiprows=1)
+    results = pd.read_csv(path / '0.monitor.csv', skiprows=1)
     results['alg'] = alg
     results['learning_rate'] = learning_rate
     results['gamma'] = gamma
