@@ -12,18 +12,17 @@ from matplotlib import cm
 def plot_hyperparamsearch_alg(df):
     '''Plot experiments contained in dataframe.'''
 
+    df['learning_rate'] = np.log10(df['learning_rate'])
     learning_rates = sorted(df['learning_rate'].unique())
     gammas = sorted(df['gamma'].unique())
     algs = sorted(df['alg'].unique())
     X = []
     Y = []
     Z = []
-    test = []
     result_df = df.groupby(['learning_rate', 'gamma', 'alg', 'index']).mean()
     for alg, lr, g in product(algs, learning_rates, gammas):
         result = result_df.loc[(lr, g, alg, pd.IndexSlice['index', :])]
         metric = result['objective']
-        test.append(alg)
         X.append(lr)
         Y.append(g)
         Z.append(metric.mean())
