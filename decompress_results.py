@@ -8,7 +8,7 @@ from tqdm import tqdm
 def decompress(path):
     shutil.unpack_archive(str(path), str(path).rstrip('.zip'))
 
-if __name__ == '__main__':
+def main():
     import argparse
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("path", help="The path to the files.")
@@ -19,3 +19,6 @@ if __name__ == '__main__':
         all_zip_folders = list(PATH.glob('*.zip'))
         list(tqdm(executor.map(decompress, all_zip_folders),
                   total=len(all_zip_folders)))
+
+if __name__ == '__main__':
+    main()
