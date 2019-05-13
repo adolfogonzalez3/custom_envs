@@ -1,6 +1,7 @@
 """classic Acrobot task"""
 
 import numpy as np
+import numpy.random as npr
 
 from gym import core, spaces
 from gym.utils import seeding
@@ -40,18 +41,17 @@ class Optimize(core.Env):
         'render.modes': []
     }
 
-    def __init__(self):
-        data = load_data()
-        features, labels = np.hsplit(data, [-1])
+    def __init__(self, data_set='iris'):
+        features, labels = load_data(data_set)
+        print(features.shape)
         self.features = features
-        self.labels, num_of_labels = to_onehot(labels)
+        self.labels, num_of_labels = to_onehot(labels, 3)
         self.feature_size = features.shape[-1]
         self.model = Model(self.feature_size, num_of_labels)
         self.H = 3
         self.obj_list = np.zeros(self.H)
         self.grad_list = np.zeros((self.H, self.feature_size, num_of_labels))
         self.W_list = np.zeros_like(self.grad_list)
-        #self.N = self.obj_list.size + self.grad_list.size + self.w.size 
         self.N = 2*self.model.size + 1
         self.observation_space = spaces.Box(low=-1e3, high=1e3, 
                                             shape=(self.N,), dtype=np.float32)
@@ -83,6 +83,7 @@ class Optimize(core.Env):
     def step(self, a):
         self.global_steps += 1
         I = self.steps % self.H
+
         labels = self.labels
         features = self.features
 
@@ -98,6 +99,7 @@ class Optimize(core.Env):
                                 self.grad_list[I].ravel()])
         terminal = self._terminal()
         reward = -objective
+        objective, _, accuracy = self.model.compute_backprop(self.features, self.labels)
         return state, reward, terminal, {'objective': objective, 'accuracy': accuracy}
 
     def _terminal(self):
