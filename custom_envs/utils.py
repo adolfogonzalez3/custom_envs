@@ -45,13 +45,12 @@ def softmax(x):
 def sigmoid(x):
     return numexpr.evaluate('1 / (1 + exp(-x - 1e-8))')
 
-def to_onehot(x, num_of_labels=None):
-    x = x.astype(np.int).ravel()
-    x = x - np.min(x)
+def to_onehot(array, num_of_labels=None):
+    unique_array, array = np.unique(array, return_inverse=True)
     if num_of_labels is None:
-        num_of_labels = np.unique(x).size
-    onehot = np.zeros((len(x), num_of_labels))
-    onehot[np.arange(len(x)), x] = 1
+        num_of_labels = unique_array.size
+    onehot = np.zeros((len(array), num_of_labels))
+    onehot[np.arange(len(array)), array] = 1
     return onehot, num_of_labels
 
 def create_env(env_name, log_dir, num_of_envs=1):
