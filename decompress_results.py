@@ -1,12 +1,12 @@
 
 import shutil
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 from tqdm import tqdm
 
 def decompress(path):
-    shutil.unpack_archive(str(path), str(path).rstrip('.zip'))
+    #shutil.unpack_archive(str(path), str(path.parent / path.stem))
 
 def main():
     import argparse
@@ -15,9 +15,9 @@ def main():
     ARGS = PARSER.parse_args()
     PATH = Path(ARGS.path)
 
-    with ThreadPoolExecutor() as executor:
+    with ProcessPoolExecutor() as executor:
         all_zip_folders = list(PATH.glob('*.zip'))
-        list(tqdm(executor.map(decompress, all_zip_folders),
+        list(tqdm(executor.map(decompress, all_zip_folders, chunksize=32),
                   total=len(all_zip_folders)))
 
 if __name__ == '__main__':
