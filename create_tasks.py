@@ -1,5 +1,7 @@
 
+import json
 import sqlite3
+from pathlib import Path
 from itertools import product
 
 import numpy as np
@@ -26,16 +28,35 @@ def create_database(file_name):
             conn.executemany('insert into experiments values (?,?,?,?,?)',
                              product(algs, learning_rates, gamma, seed, [0]))
 
-if __name__ == '__main__':
+def create_json_file(file_name):
+    algs = ['A2C', 'PPO']
+    learning_rates = 10**np.linspace(-1, -3, 10)
+    gammas = 10**np.linspace(0, -1, 10)
+    seeds = list(range(20))
+    tasks = [json.dumps({'alg': alg, 'learning_rate': lr, 'gamma': g,
+                         'seed': s})
+             for alg, lr, g, s in product(algs, learning_rates, gammas, seeds)]
+    with file_name.open('wt') as js_file:
+        js_file.write('\n'.join(tasks))
+    
+
+def main():
     import argparse
 
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument('file_name')
-    PARSER.add_argument('--type', choices=['csv', 'sqlite3'], default='csv')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file_name')
+    parser.add_argument('--type', choices=['json', 'csv', 'sqlite3'],
+                        default='json')
 
-    ARGS = PARSER.parse_args()
+    args = parser.parse_args()
+    file_name = Path(args.file_name)
 
-    if ARGS.type == 'csv':
-        create_tasks_file(ARGS.file_name)
-    elif ARGS.type == 'sqlite3':
-        create_database(ARGS.file_name)
+    if args.type == 'json':
+        create_json_file(file_name.with_suffix('.json'))
+    elif args.type == 'csv':
+        create_tasks_file(file_name.with_suffix('.csv'))
+    elif args.type == 'sqlite3':
+        create_database(file_name.with_suffix('.db'))
+
+if __name__ == '__main__':
+    main()
