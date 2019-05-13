@@ -15,6 +15,9 @@ from tensorflow.keras.layers import Dense
 
 import matplotlib.pyplot as plt
 
+from custom_envs import load_data
+
+from tqdm import tqdm
 
 def discretize(x):
     x = x.ravel()
@@ -24,28 +27,29 @@ def discretize(x):
 def run(args):
     seed, lr = args
     tf.set_random_seed(seed)
-    DATA = np.loadtxt('iris.data', dtype=np.str, delimiter=',')
-    SAMPLES, LABELS = np.hsplit(DATA, [-1])
-    IMAGE_VECTOR = SAMPLES.shape[-1:]
-    LABELS = discretize(LABELS)
+    samples, labels = load_data()
+    image_size = samples.shape[-1:]
+    labels = discretize(labels)
 
-    TRAIN_SAMPLES = SAMPLES.astype(np.float32)
-    TRAIN_LABELS = LABELS
+    train_samples = samples.astype(np.float32)
+    train_labels = labels
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(3, input_shape=IMAGE_VECTOR,
+    model.add(tf.keras.layers.Dense(3, input_shape=image_size,
                                     activation='softmax'))
     model.compile(tf.train.GradientDescentOptimizer(lr),
                   loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
-    return model.fit(TRAIN_SAMPLES, TRAIN_LABELS, epochs=40, verbose=0).history
+    return model.fit(train_samples, train_labels, epochs=40, verbose=0).history
 
 if __name__ == '__main__':
-    learning_rates = [1e-1, 1e-2, 1e-3]
-    with ProcessPoolExecutor() as executor:
+    learning_rates = 10**np.linspace(-1, -3, num=10)
+    with ProcessPoolExecutor(1) as executor:
         task_lists = [executor.map(run, product(range(10), [lr]))
                       for lr in learning_rates]
-        hist_dfs = [pd.concat([pd.DataFrame(task) for task in task_list])
-                    for task_list in task_lists]
+        hist_dfs = [pd.concat([pd.DataFrame(task) for task in tqdm(task_list)])
+                    for task_list in tqdm(task_lists)]
+    #task_lists = [[run(args) for args in product(range(10), [lr])]
+    #              for lr in learning_rates]
     for hist_df in hist_dfs:
         hist_df.reset_index(inplace=True)
 
