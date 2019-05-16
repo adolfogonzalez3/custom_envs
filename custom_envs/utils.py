@@ -53,12 +53,13 @@ def to_onehot(array, num_of_labels=None):
     onehot[np.arange(len(array)), array] = 1
     return onehot, num_of_labels
 
-def create_env(env_name, log_dir, num_of_envs=1):
-    log_dir = Path(log_dir)
+def create_env(env_name, log_dir=None, num_of_envs=1):
     envs = [gym.make(env_name) for _ in range(num_of_envs)]
-    envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
-                    info_keywords=('objective', 'accuracy'))
-            for i, env in enumerate(envs)]
+    if log_dir is not None:
+        log_dir = Path(log_dir)
+        envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
+                        info_keywords=('objective', 'accuracy'))
+                for i, env in enumerate(envs)]
     return envs
 
 def normalize(data):
