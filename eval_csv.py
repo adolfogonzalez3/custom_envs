@@ -15,6 +15,11 @@ from custom_envs.utils_pandas import get_unique, create_grid
 
 
 def plot_two(dataframes, names):
+    """
+    Plot multiple named dataframes.
+
+    :param dataframes: [pandas.DataFrame] A list of dataframes to plot.
+    """
     axes = defaultdict(lambda: plt.figure().add_subplot(111))
     for dataframe, name in zip(dataframes, names):
         dataframe['learning_rate'] = np.log10(dataframe['learning_rate'])
