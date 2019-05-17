@@ -7,15 +7,15 @@ from gym.envs.registration import register
 
 register(
     id='Optimize-v0',
-    entry_point='custom_envs.optimize:Optimize'
+    entry_point='custom_envs.envs.optimize:Optimize'
 )
 
 register(
     id='OptLR-v0',
-    entry_point='custom_envs.optlr:OptLR'
+    entry_point='custom_envs.envs.optlr:OptLR'
 )
 
 register(
     id='OptLRs-v0',
-    entry_point='custom_envs.optlrs:OptLRs'
+    entry_point='custom_envs.envs.optlrs:OptLRs'
 )
