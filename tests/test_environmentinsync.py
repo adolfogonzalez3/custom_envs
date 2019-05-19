@@ -33,7 +33,6 @@ def task_handle(env):
     print('Handled')
     env.close()
 
-@pytest.mark.skip()
 def test_environmentinsync_vec_env():
     env_name = 'Optimize-v0'
     envs = [EnvironmentInSync(gym.make(env_name), 3) for _ in range(5)]
