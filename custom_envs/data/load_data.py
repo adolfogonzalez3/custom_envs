@@ -6,6 +6,10 @@ import numpy as np
 from custom_envs.utils import normalize
 
 def load_data(name='iris'):
+    '''
+    Load a data set.
+
+    '''
     path = Path(__file__).resolve().parent
     if name == 'iris' or name == 'mnist':
         data = np.load((path / name).with_suffix('.npz'))['data']
