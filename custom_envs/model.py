@@ -6,9 +6,8 @@ import numexpr
 from custom_envs.utils import softmax, cross_entropy, to_onehot
 
 import tensorflow as tf
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.backend import function, gradients
+import tensorflow.keras as keras
+import tensorflow.keras.layers as k_layers
 
 class Model:
     def __init__(self, feature_size, num_of_labels):
@@ -121,6 +120,58 @@ class ModelTF:
         fd = {self.weight_ph: weights}
         self.session.run(self.weight_set_ops, feed_dict=fd)
 
+class ModelKeras:
+    def __init__(self, feature_size, num_of_labels, seed=None):
+        target = k_layers.Input((1,))
+        model = keras.Sequential()
+        model.add(k_layers.Dense(num_of_labels, input_shape=(feature_size,),
+                                 use_bias=False))
+        loss_function = keras.losses.CategoricalCrossentropy()
+        loss = loss_function(target, model.output)
+        grads = keras.backend.gradients(loss, model.weights)
+        get_grads = keras.backend.function((model.input, target), grads)
+        model.compile('sgd', loss_function)
+        self.model = model
+        self.loss_function = keras.backend.function((model.input, target), loss)
+        self.grad_function = get_grads
+
+    def reset(self, np_random=npr):
+        self.model.set_weights([np_random.normal(size=w.shape.as_list())
+                                for w in model.weights])
+
+    @property
+    def size(self):
+        return sum([keras.backend.count_params(w) for w in model.weights])
+
+    @property
+    def weights(self):
+        return self.model.get_weights()
+
+    def forward(self, features):
+        return self.model.predict(features, verbose=0)
+
+    def compute_loss(self, features, labels, acts=None):
+        labels = np.argmax(labels, axis=-1)
+        return self.loss_function((features, labels))
+
+    def compute_gradients(self, features, labels, acts=None):
+        labels = np.argmax(labels, axis=-1)
+        return self.grad_function((features, labels))
+
+    def compute_accuracy(self, features, labels, acts=None):
+        labels = np.argmax(labels, axis=-1)
+        return self.model.evaluate(features, labels, verbose=0)
+
+    def compute_backprop(self, features, labels):
+        loss = self.compute_loss(features, labels)
+        grad = self.compute_gradients(features, labels)
+        acc = self.compute_accuracy(features, labels)
+        return loss, grad, acc
+
+    def set_weights(self, weights):
+        self.model.set_weights(weights)
+
+
 if __name__ == '__main__':
     from time import time
     import numpy.random as npr
@@ -128,9 +179,8 @@ if __name__ == '__main__':
 
     NUM_OF_EPOCHS = 200
 
-    data = load_data()
-    features = data[..., :-1]
-    labels, num_of_labels = to_onehot(data[..., -1])
+    features, labels = load_data('skin')
+    labels, num_of_labels = to_onehot(labels)
 
 
     model = Model(features.shape[-1], num_of_labels)
@@ -138,7 +188,7 @@ if __name__ == '__main__':
     loss, gradients, acc = model.compute_backprop(features, labels)
     begin = time()
     for i in range(NUM_OF_EPOCHS):
-        indices = npr.choice(range(150), size=32, replace=False)
+        indices = npr.choice(range(150), size=64, replace=False)
         feat_batch = features[indices, ...]
         lab_batch = labels[indices, ...]
         loss, gradients, acc = model.compute_backprop(feat_batch, lab_batch)
@@ -149,12 +199,12 @@ if __name__ == '__main__':
     print('Time Elapsed: ', time_elapsed)
     print(time_elapsed / NUM_OF_EPOCHS, ' seconds per epoch')
 
-    model = ModelTF(features.shape[-1], num_of_labels)
+    model = ModelKeras(features.shape[-1], num_of_labels)
 
     loss, gradients, acc = model.compute_backprop(features, labels)
     begin = time()
     for i in range(NUM_OF_EPOCHS):
-        indices = npr.choice(range(150), size=32, replace=False)
+        indices = npr.choice(range(150), size=64, replace=False)
         feat_batch = features[indices, ...]
         lab_batch = labels[indices, ...]
         loss, gradients, acc = model.compute_backprop(feat_batch, lab_batch)
