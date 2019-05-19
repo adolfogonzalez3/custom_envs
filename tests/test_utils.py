@@ -1,8 +1,6 @@
 
 from itertools import chain
 
-from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
-
 import gym
 import pytest
 import numpy as np
@@ -10,6 +8,7 @@ import pandas as pd
 import numpy.random as npr
 
 import custom_envs.utils as utils
+from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 
 def test_shuffle():
@@ -35,6 +34,7 @@ def test_batchify_zip():
         assert np.all(b == B[i*32:32*(i+1)])
         assert np.all(256+a == b)
 
+
 def test_cross_entropy():
     p = utils.softmax(npr.rand(1, 10))
     y = np.zeros((1, 10))
@@ -43,6 +43,7 @@ def test_cross_entropy():
     assert cost >= 0
     assert isinstance(cost, float)
 
+
 def test_cross_entropy_batch():
     p = utils.softmax(npr.rand(10, 10))
     y = np.zeros((10, 10))
@@ -50,6 +51,7 @@ def test_cross_entropy_batch():
     cost = utils.cross_entropy(p, y)
     assert cost >= 0
     assert isinstance(cost, float)
+
 
 def test_mse():
     p = npr.rand(1, 10)
@@ -60,6 +62,7 @@ def test_mse():
     assert cost >= 0
     assert isinstance(cost, float)
 
+
 def test_mse_batch():
     p = npr.rand(10, 10)
     p = p - np.min(p) / np.ptp(p)
@@ -69,12 +72,14 @@ def test_mse_batch():
     assert cost >= 0
     assert isinstance(cost, float)
 
+
 def test_softmax():
     p = npr.randint(-10, 10, size=(10, 5))
     p = utils.softmax(p)
     assert np.all(p >= 0)
     assert np.all(p <= 1)
     assert np.all(np.isclose(np.sum(p, axis=1), 1))
+
 
 def test_softmax_large():
     p = npr.randint(-1e9, 1e9, size=(10, 5))
@@ -83,17 +88,20 @@ def test_softmax_large():
     assert np.all(p <= 1)
     assert np.all(np.sum(p, axis=1) == 1)
 
+
 def test_sigmoid():
     p = npr.randint(-10, 10, size=(10, 5))
     p = utils.sigmoid(p)
     assert np.all(p >= 0)
     assert np.all(p <= 1)
 
+
 def test_sigmoid_large():
     p = npr.randint(-1e9, 1e9, size=(10, 5))
     p = utils.sigmoid(p)
     assert np.all(p >= 0)
     assert np.all(p <= 1)
+
 
 def test_to_onehot():
     A = [i % 5 + 10 for i in range(10)]
@@ -102,6 +110,7 @@ def test_to_onehot():
     assert num_of_labels == 5
     assert np.all(B[:5] == B[5:])
     assert num_of_labels == 5
+
 
 def test_normalize():
     A = npr.randn(5, 5)
