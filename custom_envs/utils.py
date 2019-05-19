@@ -58,7 +58,7 @@ def batchify_zip(*args, size=32):
 
     :param args: *[list or numpy.array] A variable number of arguments that
                                         are either lists or numpy arrays.
-    :param size: (int) The size of each batch.    
+    :param size: (int) The size of each batch.
     '''
     for batch_slice in range_slice(len(args[0]), step=size):
         yield [arg[batch_slice] for arg in args]
