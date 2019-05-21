@@ -44,3 +44,13 @@ def create_grid(dataframe, levels=3):
     grid_shape = [len(l) for l in dataframe.index.levels[:levels]]
     grids = [np.array(idx).reshape(grid_shape) for idx in idxs]
     return grids, groups
+
+def max_group(dataframe, by, column, method='mean'):
+    groups = dataframe.groupby(by)
+    if method == 'mean':
+        return groups.mean()[column].idxmax()
+
+def min_group(dataframe, by, column, method='mean'):
+    groups = dataframe.groupby(by)
+    if method == 'mean':
+        return groups.mean()[column].idxmin()

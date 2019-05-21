@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-import custom_envs.utils_pandas as utils
+import custom_envs.utils.utils_pandas as utils
 
 def create_dataframe():
     data = [[{'a': i, 'b': j, 'c': 0} for i in range(10)] for j in range(10)]

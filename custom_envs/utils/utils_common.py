@@ -9,6 +9,7 @@ import gym
 import numexpr
 import numpy as np
 import numpy.random as npr
+from PIL import Image
 
 from stable_baselines.bench import Monitor
 
@@ -124,7 +125,7 @@ def to_onehot(array, num_of_labels=None):
     return onehot, num_of_labels
 
 
-def create_env(env_name, log_dir=None, num_of_envs=1):
+def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
     '''
     Create many environments at once with optional independent logging.
 
@@ -134,7 +135,7 @@ def create_env(env_name, log_dir=None, num_of_envs=1):
                                   log anything.
     :param num_of_envs: (int) The number of environments to create.
     '''
-    envs = [gym.make(env_name) for _ in range(num_of_envs)]
+    envs = [gym.make(env_name, **kwarg) for _ in range(num_of_envs)]
     if log_dir is not None:
         log_dir = Path(log_dir)
         envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
@@ -151,3 +152,21 @@ def normalize(data):
     '''
     mini = np.min(data, axis=0)
     return (data - mini) / (np.max(data, axis=0) - mini + 1e-8)
+
+def resize(array, shape):
+    return np.asarray(Image.fromarray(array).resize((7, 7)))
+
+def resize_all(array):
+    return np.array([resize(sample.reshape((28, 28)), (7, 7)).ravel()
+                     for sample in array])
+
+def plot(axis_obj, sequence, **kwargs):
+    axis_obj.plot(range(len(sequence)), sequence, **kwargs)
+
+def fill_between(axis_obj, mean, std, **kwargs):
+    axis_obj.fill_between(range(len(mean)), mean + std, mean - std, **kwargs)
+
+def add_legend(axis):
+    chartBox = axis.get_position()
+    axis.set_position([chartBox.x0, chartBox.y0, chartBox.width*0.8, chartBox.height])
+    axis.legend(loc='upper center', bbox_to_anchor=(1.2, 0.8), shadow=True, ncol=1)
