@@ -1,44 +1,28 @@
-
-import json
+'''
+Module for creating files that are contain hyperparameters for experiments.
+'''
 import sqlite3
 from pathlib import Path
 from itertools import product
 
 import numpy as np
+import pandas as pd
 
-def create_tasks_file(file_name):
-    algs = ['A2C', 'PPO']
-    learning_rate = [str(i) for i in 10**np.linspace(-1, -3, 10)]
-    gamma = [str(i) for i in 10**np.linspace(0, -1, 10)]
-    seed = list(str(i) for i in range(20))
-    with open(file_name, 'wt') as csv:
-        for args in product(algs, learning_rate, gamma, seed):
-            csv.write(','.join(args + ('Optimize-v0', 'results')) + '\n')
 
-def create_database(file_name):
-    algs = ['A2C', 'DDPG', 'PPO']
-    learning_rates = 10**np.linspace(-1, -3, 10)
-    gamma = 10**np.linspace(0, -1, 10)
-    seed = list(range(20))
-    with sqlite3.connect(file_name) as conn:
-        with conn:
-            conn.execute(('create table experiments (alg text, lr real, '
-                          'gamma real, seed integer, done integer)'))
-            
-            conn.executemany('insert into experiments values (?,?,?,?,?)',
-                             product(algs, learning_rates, gamma, seed, [0]))
+def populate_table(hyperparams):
+    '''
+    Populate a table with all combinations of hyperparams.
 
-def create_json_file(file_name):
-    algs = ['A2C', 'PPO']
-    learning_rates = 10**np.linspace(-1, -3, 10)
-    gammas = 10**np.linspace(0, -1, 10)
-    seeds = list(range(20))
-    tasks = [json.dumps({'alg': alg, 'learning_rate': lr, 'gamma': g,
-                         'seed': s})
-             for alg, lr, g, s in product(algs, learning_rates, gammas, seeds)]
-    with file_name.open('wt') as js_file:
-        js_file.write('\n'.join(tasks))
-    
+    :param hyperparams: (dict) A dictionary of lists where the key is the name
+                               of the hyperparameter and the associated value
+                               is a list of possible values for that parameter.
+    :return: (pandas.DataFrame) A dataframe containing all possible
+                                combinations of hyperparameters.
+    '''
+    tasks = [{name: param for name, param in zip(hyperparams.keys(), params)}
+             for params in product(*list(hyperparams.values()))]
+    return pd.DataFrame(tasks)
+
 
 def main():
     import argparse
@@ -46,17 +30,31 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('file_name')
     parser.add_argument('--type', choices=['json', 'csv', 'sqlite3'],
-                        default='json')
+                        default='csv')
 
     args = parser.parse_args()
-    file_name = Path(args.file_name)
+    file_name = Path(args.file_name).with_suffix('.' + args.type)
+
+    columns = ['algs', 'learning_rate', 'gamma', 'seed']
+    hyperparams = {}
+    hyperparams['seed'] = list(range(20))
+    hyperparams['gamma'] = 10**np.linspace(0, -1, 10)
+    hyperparams['learning_rate'] = 10**np.linspace(-1, -3, 10)
+    hyperparams['algs'] = ['A2C', 'PPO']
+
+    dataframe = populate_table(hyperparams)
+    dataframe = dataframe.reindex(columns=columns)
+    dataframe['env_name'] = 'Optimize-v0'
+    dataframe['path'] = 'results_mnist'
 
     if args.type == 'json':
-        create_json_file(file_name.with_suffix('.json'))
+        dataframe.to_json(file_name, orient='records', lines=True)
     elif args.type == 'csv':
-        create_tasks_file(file_name.with_suffix('.csv'))
+        dataframe.to_csv(file_name, header=False, index=False,)
     elif args.type == 'sqlite3':
-        create_database(file_name.with_suffix('.db'))
+        with sqlite3.connect(str(file_name)) as conn:
+            dataframe.to_sql('hyperparameters', conn)
+
 
 if __name__ == '__main__':
     main()
