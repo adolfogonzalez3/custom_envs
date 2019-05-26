@@ -33,14 +33,19 @@ def main():
                         default='csv')
 
     args = parser.parse_args()
-    file_name = Path(args.file_name).with_suffix('.' + args.type)
+    if args.type == 'sqlite3':
+        suffix = '.db'
+    else:
+        suffix = '.' + args.type
 
-    columns = ['algs', 'learning_rate', 'gamma', 'seed']
+    file_name = Path(args.file_name).with_suffix(suffix)
+
+    columns = ['alg', 'learning_rate', 'gamma', 'seed']
     hyperparams = {}
     hyperparams['seed'] = list(range(20))
     hyperparams['gamma'] = 10**np.linspace(0, -1, 10)
     hyperparams['learning_rate'] = 10**np.linspace(-1, -3, 10)
-    hyperparams['algs'] = ['A2C', 'PPO']
+    hyperparams['alg'] = ['A2C', 'PPO']
 
     dataframe = populate_table(hyperparams)
     dataframe = dataframe.reindex(columns=columns)
@@ -52,6 +57,7 @@ def main():
     elif args.type == 'csv':
         dataframe.to_csv(file_name, header=False, index=False,)
     elif args.type == 'sqlite3':
+        dataframe['done'] = False
         with sqlite3.connect(str(file_name)) as conn:
             dataframe.to_sql('hyperparameters', conn)
 
