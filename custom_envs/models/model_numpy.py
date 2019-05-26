@@ -3,9 +3,10 @@ import numexpr
 import numpy as np
 import numpy.random as npr
 
-from custom_envs.utils import softmax, cross_entropy, to_onehot
+from custom_envs.models.model import ModelBase
+from custom_envs.utils.utils_common import softmax, cross_entropy, to_onehot
 
-class ModelNumpy:
+class ModelNumpy(ModelBase):
     '''
     A model that uses a numpy backend.
     '''
@@ -16,13 +17,11 @@ class ModelNumpy:
         :param feature_size: (int) The number of features.
         :param num_of_labels: (int) The number of labels.
         '''
-        self.weights = npr.normal(size=(feature_size, num_of_labels))
+        self._weights = npr.normal(size=(feature_size, num_of_labels))
 
-    def reset(self):
-        '''
-        Reset the model's parameters with a normal distribution.
-        '''
-        self.weights = npr.normal(size=self.weights.shape)
+    @property
+    def weights(self):
+        return self._weights
 
     @property
     def size(self):
@@ -30,6 +29,12 @@ class ModelNumpy:
         Return the number of parameters in the model.
         '''
         return self.weights.size
+
+    def reset(self, np_random=npr):
+        '''
+        Reset the model's parameters with a normal distribution.
+        '''
+        self._weights = np_random.normal(size=self.weights.shape)
 
     def forward(self, features):
         '''
@@ -80,7 +85,7 @@ class ModelNumpy:
         '''
         Set the weights of the model.
         '''
-        self.weights = weights
+        self._weights = weights
 
     def get_weights(self):
         '''

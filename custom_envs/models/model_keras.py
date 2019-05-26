@@ -4,7 +4,9 @@ import numpy.random as npr
 import tensorflow.keras as keras
 import tensorflow.keras.layers as k_layers
 
-class ModelKeras:
+from custom_envs.models.model import ModelBase
+
+class ModelKeras(ModelBase):
     '''
     A model that uses a numpy backend.
     '''
@@ -17,7 +19,7 @@ class ModelKeras:
         loss = loss_function(target, model.output)
         grads = keras.backend.gradients(loss, model.weights)
         get_grads = keras.backend.function((model.input, target), grads)
-        model.compile('sgd', loss_function)
+        model.compile('sgd', loss_function, metrics=['acc'])
         self.model = model
         self.loss_function = keras.backend.function((model.input, target), loss)
         self.grad_function = get_grads
@@ -46,14 +48,14 @@ class ModelKeras:
         '''
         return self.model.predict(features, verbose=0)
 
-    def compute_loss(self, features, labels, acts=None):
+    def compute_loss(self, features, labels):
         '''
         Compute the loss given the features and labels.
         '''
         labels = np.argmax(labels, axis=-1)
-        return float(self.loss_function((features, labels)))
+        return float(self.model.test_on_batch(features, labels)[0])
 
-    def compute_gradients(self, features, labels, acts=None):
+    def compute_gradients(self, features, labels):
         '''
         Compute the gradients of all parameters in respect to the cost.
         '''
@@ -65,7 +67,7 @@ class ModelKeras:
         Compute the accuracy.
         '''
         labels = np.argmax(labels, axis=-1)
-        return float(self.model.evaluate(features, labels, verbose=0))
+        return float(self.model.test_on_batch(features, labels)[1])
 
     def compute_backprop(self, features, labels):
         '''
@@ -80,10 +82,30 @@ class ModelKeras:
         '''
         Set the weights of the model.
         '''
-        self.model.set_weights(weights)
+        self.model.set_weights([weights])
 
     def get_weights(self):
         '''
         Get the weights of the model.
         '''
         return self.model.get_weights()[0]
+
+    def compute_accuracy_batch(self, features, labels, batch_size=32):
+        '''Compute the accuracy using batches.'''
+        labels = np.argmax(labels, axis=-1)
+        return float(self.model.evaluate(features, labels, verbose=0,
+                                         batch_size=batch_size)[1])
+
+    def compute_loss_batch(self, features, labels, batch_size=32):
+        '''Compute the loss using batches.'''
+        labels = np.argmax(labels, axis=-1)
+        return float(self.model.evaluate(features, labels, verbose=0,
+                                         batch_size=batch_size)[0])
+
+    def compute_backprop_batch(self, features, labels, batch_size=32):
+        '''Compute the loss, gradients, and accuracy using batches.'''
+        labs = np.argmax(labels, axis=-1)
+        loss, accu = self.model.evaluate(features, labs, verbose=0,
+                                         batch_size=batch_size)
+        grad = self.compute_gradients_batch(features, labels, batch_size)
+        return float(loss), grad, float(accu)
