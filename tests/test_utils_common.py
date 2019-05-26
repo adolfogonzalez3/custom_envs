@@ -1,14 +1,8 @@
 
-from itertools import chain
-
-import gym
-import pytest
 import numpy as np
-import pandas as pd
 import numpy.random as npr
 
 import custom_envs.utils.utils_common as utils
-from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 
 def test_shuffle():
