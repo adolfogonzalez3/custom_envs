@@ -12,4 +12,4 @@ __pycache__
 *.data
 *.zip
 *.7z
-*.sqlite3
+*.db
