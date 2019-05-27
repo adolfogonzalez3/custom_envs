@@ -4,12 +4,12 @@ Module that contains common utilities for the package.
 
 from pathlib import Path
 from itertools import zip_longest
+from contextlib import contextmanager
 
 import gym
 import numexpr
 import numpy as np
 import numpy.random as npr
-from PIL import Image
 
 from stable_baselines.bench import Monitor
 
@@ -153,20 +153,18 @@ def normalize(data):
     mini = np.min(data, axis=0)
     return (data - mini) / (np.max(data, axis=0) - mini + 1e-8)
 
-def resize(array, shape):
-    return np.asarray(Image.fromarray(array).resize((7, 7)))
 
-def resize_all(array):
-    return np.array([resize(sample.reshape((28, 28)), (7, 7)).ravel()
-                     for sample in array])
+@contextmanager
+def use_random_state(random_state):
+    '''
+    Set the random state for the current context.
 
-def plot(axis_obj, sequence, **kwargs):
-    axis_obj.plot(range(len(sequence)), sequence, **kwargs)
-
-def fill_between(axis_obj, mean, std, **kwargs):
-    axis_obj.fill_between(range(len(mean)), mean + std, mean - std, **kwargs)
-
-def add_legend(axis):
-    chartBox = axis.get_position()
-    axis.set_position([chartBox.x0, chartBox.y0, chartBox.width*0.8, chartBox.height])
-    axis.legend(loc='upper center', bbox_to_anchor=(1.2, 0.8), shadow=True, ncol=1)
+    :param random_state: (numpy.random.RandomState) The random state generator
+                                                    to use for the context.
+    '''
+    saved_state = npr.get_state()
+    try:
+        npr.set_state(random_state.get_state())
+        yield random_state
+    finally:
+        npr.set_state(saved_state)
