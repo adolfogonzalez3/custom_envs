@@ -39,6 +39,7 @@ class BaseEnvironment(Env):
         with use_random_state(self.random_generator):
             state, reward, terminal, info = self._step(action)
         info['episode'] = {'r': reward, 'l': self.current_step}
+        self.current_step += 1
         return state, reward, terminal, info
 
     def reset(self):

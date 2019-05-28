@@ -9,8 +9,8 @@ class InMemorySequence(BaseSequence):
     '''A class used to get batches from a data set stored in memory.'''
 
     def __init__(self, features, labels, batch_size=None):
-        print(labels.shape)
-        print(len(features), len(labels))
+        #print(labels.shape)
+        #print(len(features), len(labels))
         assert len(features) == len(labels)
         self.features = features
         self.labels = labels
