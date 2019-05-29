@@ -62,6 +62,7 @@ class Monitor(Wrapper):
             header = not self.file_path.is_file()
             mode = 'w' if header else 'a'
             dataframe = pd.DataFrame(self.data)
+            dataframe = dataframe.reindex(sorted(dataframe.columns), axis=1)
             dataframe.to_csv(self.file_path, header=header, index=False,
                              mode=mode)
         self.data = []
