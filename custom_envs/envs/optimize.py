@@ -19,7 +19,7 @@ class Optimize(BaseEnvironment):
     The optimize environment requires an agent to reduce the
     objective function of a target neural network on some dataset by changing
     the weights. The action of the agent is added to the current weights of
-    the target neural network. 
+    the target neural network.
 
     Target Network:
     The target network is a simple multiclass softmax classifier. The
@@ -37,7 +37,7 @@ class Optimize(BaseEnvironment):
         'render.modes': []
     }
 
-    def __init__(self, data_set='iris', batch_size=None, n_of_steps=None):
+    def __init__(self, data_set='mnist', batch_size=None, n_of_steps=None):
         self.sequence = load_data(data_set, batch_size)
         num_of_labels = self.sequence.label_shape[0]
         feature_size = self.sequence.feature_shape[0]
@@ -54,7 +54,7 @@ class Optimize(BaseEnvironment):
                                 shape=(self.model.size,))
         self.seed()
 
-    def _reset(self):
+    def base_reset(self):
         #shuffle(self.features, self.labels, np_random=self.np_random)
         self.loss_hist.fill(0)
         self.grad_hist.fill(0)
@@ -63,7 +63,7 @@ class Optimize(BaseEnvironment):
         return np.concatenate([self.wght_hist[0].ravel(), self.loss_hist[[0]],
                                self.grad_hist[0].ravel()])
 
-    def _step(self, a):
+    def base_step(self, a):
         idx = self.current_step % len(self.loss_hist)
 
         features, labels = self.sequence[0]
@@ -87,6 +87,7 @@ class Optimize(BaseEnvironment):
         reward = -loss
         terminal = self._terminal()
         info = {'objective': loss, 'accuracy': accu}
+        #print(self.current_step)
         return state, reward, terminal, info
 
     def _terminal(self):
@@ -106,7 +107,7 @@ def __main():
     from stable_baselines.common.vec_env import DummyVecEnv
     env = DummyVecEnv([Optimize])
     agent = PPO2(MlpPolicy, env, verbose=1)
-    agent.learn(total_timesteps=10**4)
+    agent.learn(total_timesteps=10**2)
 
 
 if __name__ == '__main__':

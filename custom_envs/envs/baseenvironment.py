@@ -37,7 +37,7 @@ class BaseEnvironment(Env):
                                      action space.
         '''
         with use_random_state(self.random_generator):
-            state, reward, terminal, info = self._step(action)
+            state, reward, terminal, info = self.base_step(action)
         info['episode'] = {'r': reward, 'l': self.current_step}
         self.current_step += 1
         return state, reward, terminal, info
@@ -48,12 +48,12 @@ class BaseEnvironment(Env):
         '''
         self.current_step = 0
         with use_random_state(self.random_generator):
-            return self._reset()
+            return self.base_reset()
 
     @abstractmethod
-    def _step(self, action):
+    def base_step(self, action):
         pass
 
     @abstractmethod
-    def _reset(self):
+    def base_reset(self):
         pass
