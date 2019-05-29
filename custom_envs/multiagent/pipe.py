@@ -2,6 +2,8 @@
 from enum import Enum
 from abc import ABC, abstractmethod
 
+import zmq
+
 class BasePipe(ABC):
     @abstractmethod
     def send(self, data):
@@ -43,3 +45,49 @@ class PipeQueue(BasePipe):
 
     def reverse(self):
         return PipeQueue(self.client, self.host)
+
+
+class ZMQQueueServer(BasePipe):
+    def __init__(self, host_name):
+        ctx = zmq.Context.instance()
+        self.socket = ctx.socket(zmq.PAIR)
+        port = self.socket.bind_to_random_port(host_name)
+        self.host_name = '{}:{:d}'.format(host_name, port)
+
+    def send(self, data):
+        self.socket.send_pyobj(data)
+
+    def recv(self):
+        return self.socket.recv_pyobj()
+
+    def poll(self, timeout=None):
+        return self.socket.poll(timeout) > 0
+
+    def reverse(self):
+        return ZMQQueueClient(self.host_name)
+
+
+class ZMQQueueClient(BasePipe):
+    def __init__(self, host_name):
+        self.socket = None
+        self.host_name = host_name
+
+    def open(self):
+        ctx = zmq.Context.instance()
+        self.socket = ctx.socket(zmq.PAIR)
+        self.socket.connect(self.host_name)
+
+    def send(self, data):
+        if self.socket is None:
+            self.open()
+        self.socket.send_pyobj(data)
+
+    def recv(self):
+        if self.socket is None:
+            self.open()
+        return self.socket.recv_pyobj()
+
+    def poll(self, timeout=None):
+        if self.socket is None:
+            self.open()
+        return self.socket.poll(timeout) > 0
