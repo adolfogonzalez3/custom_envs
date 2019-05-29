@@ -36,10 +36,10 @@ class BaseEnvironment(Env):
         :param action: (numpy.array) An action that follows the rules of the
                                      action space.
         '''
+        self.current_step += 1
         with use_random_state(self.random_generator):
             state, reward, terminal, info = self.base_step(action)
         info['episode'] = {'r': reward, 'l': self.current_step}
-        self.current_step += 1
         return state, reward, terminal, info
 
     def reset(self):
