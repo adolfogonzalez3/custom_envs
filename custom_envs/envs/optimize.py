@@ -85,13 +85,11 @@ class Optimize(BaseEnvironment):
                                 self.loss_hist[[idx]],
                                 self.grad_hist[idx].ravel()])
         reward = -loss
-        terminal = self._terminal()
         info = {'objective': loss, 'accuracy': accu}
-        #print(self.current_step)
-        return state, reward, terminal, info
+        return state, reward, self._terminal(), info
 
     def _terminal(self):
-        return self.current_step > 40
+        return self.current_step >= 40
 
     def render(self, mode='human'):
         pass
