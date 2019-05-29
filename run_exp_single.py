@@ -11,17 +11,14 @@ from functools import partial
 from itertools import product
 from tempfile import TemporaryDirectory
 
-import gym
-import numpy as np
 import tensorflow as tf
 from stable_baselines import ddpg
-from stable_baselines.bench import Monitor
 from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.policies import MlpPolicy
-from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines.common.misc_util import set_global_seeds
 
-from custom_envs.utils.utils_common import create_env
+from custom_envs.utils.utils_logging import Monitor
+from custom_envs.utils.utils_venv import SubprocVecEnv
 from custom_envs.envs.optimize import Optimize
 
 ENV_NAMES = ('Optimize-v0', 'OptLR-v0', 'OptLRs-v0')
@@ -30,8 +27,8 @@ LOGGER = logging.getLogger(__name__)
 
 def run_agent(envs, alg, learning_rate, gamma, seed, path):
     set_global_seeds(seed)
-    dummy_env = DummyVecEnv(envs)
-    #dummy_env = SubprocVecEnv(envs)
+    #dummy_env = DummyVecEnv(envs)
+    dummy_env = SubprocVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
                      learning_rate=learning_rate, verbose=1)
@@ -46,14 +43,14 @@ def run_agent(envs, alg, learning_rate, gamma, seed, path):
     except tf.errors.InvalidArgumentError:
         LOGGER.error('Possible Nan, {!s}'.format((alg, learning_rate, gamma)))
     finally:
+        dummy_env.close()
         model.save(str(path))
-        for env in [e() for e in envs]:
-            env.close()
+        
 
 
 def run_experiment(env_name, alg, learning_rate, gamma, seed, save_to):
     expr_id = (env_name, alg, learning_rate, gamma, seed)
-    num_of_envs = 1 if alg == 'DDPG' else 1
+    num_of_envs = 1 if alg == 'DDPG' else 2
     task_name = '{}-{:.4f}-{:.4f}-{:d}'.format(alg, learning_rate, gamma, seed)
     save_to = Path(save_to, env_name, task_name).resolve()
     with TemporaryDirectory() as tmpdir:
@@ -62,14 +59,20 @@ def run_experiment(env_name, alg, learning_rate, gamma, seed, save_to):
         with (log_dir / 'hyperparams.json').open('wt') as js_file:
             json.dump({'env_name': env_name, 'alg': alg, 'gamma': gamma,
                        'learning_rate': learning_rate, 'seed': seed}, js_file)
-        save_path = str(log_dir / 'model')
-        envs = create_env(env_name, log_dir, num_of_envs)
-        for i, env in enumerate(envs):
-            env.seed(seed + i*num_of_envs)
-        envs_callable = [partial(lambda e: e, env) for env in envs]
+        model_path = str(log_dir / 'model.pkl')
+        log_path = str(log_dir / 'monitor_{:d}')
+        #envs = create_env(env_name, log_dir, num_of_envs)
+        #for i, env in enumerate(envs):
+        #    env.seed(seed + i*num_of_envs)
+        #envs_callable = [partial(lambda e: e, env) for env in envs]
+        envs_callable = [partial(Monitor, Optimize(), log_path.format(i),
+                                 allow_early_resets=True,
+                                 info_keywords=('objective', 'accuracy'),
+                                 chunk_size=1024)
+                         for i in range(num_of_envs)]
         try:
             run_agent(envs_callable, alg, learning_rate, gamma, seed,
-                      save_path)
+                      model_path)
             shutil.make_archive(str(save_to), 'zip', str(log_dir))
         except RuntimeError as error:
             LOGGER.error('%s, %s', error, expr_id)
