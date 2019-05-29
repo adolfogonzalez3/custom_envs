@@ -41,14 +41,13 @@ class PipeQueue(BasePipe):
         if self.data is PipeMsg.EMPTY:
             self.data = self.host.get(timeout=timeout)
         return True
-        #return not self.host.empty()
 
     def reverse(self):
         return PipeQueue(self.client, self.host)
 
 
 class ZMQQueueServer(BasePipe):
-    def __init__(self, host_name):
+    def __init__(self, host_name='tcp://127.0.0.1'):
         ctx = zmq.Context.instance()
         self.socket = ctx.socket(zmq.PAIR)
         port = self.socket.bind_to_random_port(host_name)
@@ -63,7 +62,7 @@ class ZMQQueueServer(BasePipe):
     def poll(self, timeout=None):
         return self.socket.poll(timeout) > 0
 
-    def reverse(self):
+    def create_client(self):
         return ZMQQueueClient(self.host_name)
 
 
@@ -91,3 +90,7 @@ class ZMQQueueClient(BasePipe):
         if self.socket is None:
             self.open()
         return self.socket.poll(timeout) > 0
+
+def create_pipe():
+    host = ZMQQueueServer()
+    return host, host.create_client()
