@@ -3,7 +3,7 @@ import multiprocessing as mp
 from enum import Enum
 from collections import namedtuple
 
-from custom_envs.networking import create_pipe
+from custom_envs.networking import create_pipe, PipeQueue
 
 SpawnData = namedtuple('SpawnData', ['ID', 'data'])
 SpawnMailbox = namedtuple('SpawnMailbox', ['ID', 'mailbox'])
@@ -51,8 +51,12 @@ class Mailbox:
 
 
 def create_mailbox(manager):
-    host, client = create_pipe()
-    return Mailbox(host), Mailbox(client)
+    #host, client = create_pipe()
+    host = manager.Queue()
+    client = manager.Queue()
+    pipe = PipeQueue(host, client)
+    return Mailbox(pipe), Mailbox(pipe.reverse())
+    #return Mailbox(host), Mailbox(client)
 
 
 class MailboxInSync(object):

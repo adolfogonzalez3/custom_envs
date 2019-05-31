@@ -101,6 +101,6 @@ class ZMQQueueClient(BasePipe):
         if self.socket is not None:
             self.socket.close()
 
-def create_pipe(manager):
+def create_pipe():
     host = ZMQQueueServer()
     return host, host.create_client()
