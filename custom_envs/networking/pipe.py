@@ -17,6 +17,10 @@ class BasePipe(ABC):
     def poll(self, timeout=None):
         pass
 
+    @abstractmethod
+    def close(self):
+        pass
+
 class PipeMsg(Enum):
     EMPTY = 0
 
@@ -32,10 +36,9 @@ class PipeQueue(BasePipe):
     def recv(self):
         if self.data is PipeMsg.EMPTY:
             return self.host.get()
-        else:
-            data = self.data
-            self.data = PipeMsg.EMPTY
-            return data
+        data = self.data
+        self.data = PipeMsg.EMPTY
+        return data
 
     def poll(self, timeout=None):
         if self.data is PipeMsg.EMPTY:
@@ -65,6 +68,9 @@ class ZMQQueueServer(BasePipe):
     def create_client(self):
         return ZMQQueueClient(self.host_name)
 
+    def close(self):
+        self.socket.close()
+
 
 class ZMQQueueClient(BasePipe):
     def __init__(self, host_name):
@@ -90,6 +96,10 @@ class ZMQQueueClient(BasePipe):
         if self.socket is None:
             self.open()
         return self.socket.poll(timeout) > 0
+
+    def close(self):
+        if self.socket is not None:
+            self.socket.close()
 
 def create_pipe():
     host = ZMQQueueServer()
