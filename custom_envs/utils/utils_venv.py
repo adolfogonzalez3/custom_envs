@@ -7,6 +7,7 @@ import numpy as np
 from stable_baselines.common.vec_env import VecEnv, CloudpickleWrapper
 from stable_baselines.common.tile_images import tile_images
 
+from custom_envs.networking import create_pipe
 
 def get_context(start_method):
     '''Get a new multiprocessing context.'''
@@ -18,38 +19,40 @@ def get_context(start_method):
     return mp.get_context(start_method)
 
 def _worker(remote, parent_remote, env_fn_wrapper):
-    parent_remote.close()
+    #parent_remote.close()
     env = env_fn_wrapper.var()
-    while True:
-        try:
-            cmd, data = remote.recv()
-            if cmd == 'step':
-                observation, reward, done, info = env.step(data)
-                if done:
+    try:
+        while True:
+            try:
+                cmd, data = remote.recv()
+                if cmd == 'step':
+                    observation, reward, done, info = env.step(data)
+                    if done:
+                        observation = env.reset()
+                    remote.send((observation, reward, done, info))
+                elif cmd == 'reset':
                     observation = env.reset()
-                remote.send((observation, reward, done, info))
-            elif cmd == 'reset':
-                observation = env.reset()
-                remote.send(observation)
-            elif cmd == 'render':
-                remote.send(env.render(*data[0], **data[1]))
-            elif cmd == 'close':
-                env.close()
-                remote.close()
+                    remote.send(observation)
+                elif cmd == 'render':
+                    remote.send(env.render(*data[0], **data[1]))
+                elif cmd == 'close':
+                    remote.close()
+                    break
+                elif cmd == 'get_spaces':
+                    remote.send((env.observation_space, env.action_space))
+                elif cmd == 'env_method':
+                    method = getattr(env, data[0])
+                    remote.send(method(*data[1], **data[2]))
+                elif cmd == 'get_attr':
+                    remote.send(getattr(env, data))
+                elif cmd == 'set_attr':
+                    remote.send(setattr(env, data[0], data[1]))
+                else:
+                    raise NotImplementedError
+            except EOFError:
                 break
-            elif cmd == 'get_spaces':
-                remote.send((env.observation_space, env.action_space))
-            elif cmd == 'env_method':
-                method = getattr(env, data[0])
-                remote.send(method(*data[1], **data[2]))
-            elif cmd == 'get_attr':
-                remote.send(getattr(env, data))
-            elif cmd == 'set_attr':
-                remote.send(setattr(env, data[0], data[1]))
-            else:
-                raise NotImplementedError
-        except EOFError:
-            break
+    finally:
+        env.close()
 
 
 class SubprocVecEnv(VecEnv):
@@ -75,15 +78,28 @@ class SubprocVecEnv(VecEnv):
 
         ctx = get_context(start_method)
 
-        self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
-        self.processes = []
-        for work_remote, remote, env_fn in zip(self.work_remotes, self.remotes, env_fns):
-            args = (work_remote, remote, CloudpickleWrapper(env_fn))
-            # daemon=True: if the main process crashes, we should not cause things to hang
-            process = ctx.Process(target=_worker, args=args, daemon=True)
-            process.start()
-            self.processes.append(process)
-            work_remote.close()
+        if False:
+            self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
+            self.processes = []
+            for work_remote, remote, env_fn in zip(self.work_remotes, self.remotes, env_fns):
+                args = (work_remote, remote, CloudpickleWrapper(env_fn))
+                # daemon=True: if the main process crashes, we should not cause things to hang
+                process = ctx.Process(target=_worker, args=args, daemon=True)
+                process.start()
+                self.processes.append(process)
+                #work_remote.close()
+        else:
+            self.remotes, self.work_remotes = zip(*[create_pipe()
+                                                    for _ in range(n_envs)])
+            self.processes = []
+            for work_remote, remote, env_fn in zip(self.work_remotes, self.remotes, env_fns):
+                args = (work_remote, None, CloudpickleWrapper(env_fn))
+                # daemon=True: if the main process crashes, we should not cause
+                # things to hang
+                process = ctx.Process(target=_worker, args=args, daemon=True)
+                process.start()
+                self.processes.append(process)
+                #work_remote.close()
 
         self.remotes[0].send(('get_spaces', None))
         observation_space, action_space = self.remotes[0].recv()
