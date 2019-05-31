@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from functools import partial
 from tempfile import TemporaryDirectory
+from concurrent.futures import ProcessPoolExecutor
 
 import gym
 import pandas as pd
@@ -94,9 +95,11 @@ def loop_over_json_file():
     args = parser.parse_args()
     dataframe = pd.read_json(args.file_path, orient='records', lines=True)
     parameters_list = dataframe.to_dict(orient='records')
-    for parameters in parameters_list:
-        print(parameters)
-        #run_experiment(parameters)
+    with ProcessPoolExecutor(8) as executor:
+        executor.map(run_experiment, parameters_list)
+        #for parameters in parameters_list:
+        #    print(parameters)
+        #    run_experiment(parameters)
 
 def single_task_json():
     import argparse
