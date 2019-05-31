@@ -3,6 +3,7 @@
 import shutil
 import sqlite3
 import logging
+from threading import Thread
 import multiprocessing as mp
 import concurrent.futures as confuture
 
@@ -27,8 +28,8 @@ LOGGER = logging.getLogger(__name__)
 def run_agent(envs, alg, learning_rate, gamma, seed, path):
     set_global_seeds(seed)
     # The algorithms require a vectorized environment to run
-    dummy_env = DummyVecEnv(envs)
-    #dummy_env = SubprocVecEnv(envs)
+    #dummy_env = DummyVecEnv(envs)
+    dummy_env = SubprocVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
                      learning_rate=learning_rate, verbose=1)
@@ -41,7 +42,7 @@ def run_agent(envs, alg, learning_rate, gamma, seed, path):
     try:
         model.learn(total_timesteps=10**6)
         model.save(path)
-    except tf.errors.InvalidArgumentError as error:
+    except tf.errors.InvalidArgumentError:
         LOGGER.error('Possible Nan, {!s}'.format((alg, learning_rate, gamma)))
     finally:
         dummy_env.close()
@@ -63,7 +64,7 @@ def run_experiment_multiagent(parameters):
         log_dir.mkdir(parents=True)
         with (log_dir / 'hyperparams.txt').open('wt') as json_file:
             json_file.write(str(parameters))
-        envs = create_env(env_name, log_dir, num_of_envs, data_set='iris')
+        envs = create_env(env_name, log_dir, num_of_envs, data_set='mnist')
         for i, env in enumerate(envs):
             env.seed(seed + i)
         save_paths = [str(log_dir / 'model_{:d}'.format(i))
@@ -80,7 +81,7 @@ def run_experiment_multiagent(parameters):
         for task in tasks:
             task.start()
         try:
-            tasks_env = [mp.Process(target=run_handle, args=[env])
+            tasks_env = [Thread(target=run_handle, args=[env])
                          for env in envs]
             for task in tasks_env:
                 task.start()
