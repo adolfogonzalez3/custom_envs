@@ -65,7 +65,7 @@ def run_experiment(parameters):
                                  log_path.format(i),
                                  allow_early_resets=True,
                                  info_keywords=('objective', 'accuracy'),
-                                 chunk_size=1024)
+                                 chunk_size=10)
                          for i in range(num_of_envs)]
         try:
             run_agent(envs_callable, alg, learning_rate, gamma, seed,

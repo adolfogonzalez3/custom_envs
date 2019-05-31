@@ -38,6 +38,7 @@ class Optimize(BaseEnvironment):
     }
 
     def __init__(self, data_set='mnist', batch_size=None, n_of_steps=None):
+        super().__init__()
         self.sequence = load_data(data_set, batch_size)
         num_of_labels = self.sequence.label_shape[0]
         feature_size = self.sequence.feature_shape[0]
