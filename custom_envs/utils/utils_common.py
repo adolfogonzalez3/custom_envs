@@ -11,7 +11,7 @@ import numexpr
 import numpy as np
 import numpy.random as npr
 
-from stable_baselines.bench import Monitor
+from custom_envs.utils.utils_logging import Monitor
 
 
 def shuffle(*args, np_random=npr):
@@ -139,7 +139,8 @@ def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
     if log_dir is not None:
         log_dir = Path(log_dir)
         envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
-                        info_keywords=('objective', 'accuracy'))
+                        info_keywords=('objective', 'accuracy'),
+                        chunk_size=1024)
                 for i, env in enumerate(envs)]
     return envs
 
