@@ -60,6 +60,7 @@ class Optimize(BaseEnvironment):
         self.grad_hist.fill(0)
         self.wght_hist.fill(0)
         self.model.reset(npr)
+        self.sequence.shuffle()
         return np.concatenate([self.wght_hist[0].ravel(), self.loss_hist[[0]],
                                self.grad_hist[0].ravel()])
 
@@ -85,8 +86,9 @@ class Optimize(BaseEnvironment):
                                 self.loss_hist[[idx]],
                                 self.grad_hist[idx].ravel()])
         reward = -loss
+        terminal = self._terminal()
         info = {'objective': loss, 'accuracy': accu}
-        return state, reward, self._terminal(), info
+        return state, reward, terminal, info
 
     def _terminal(self):
         return self.current_step >= 40
