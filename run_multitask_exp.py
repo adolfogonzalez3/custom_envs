@@ -14,18 +14,20 @@ from tempfile import TemporaryDirectory
 import tensorflow as tf
 import stable_baselines.ddpg as ddpg
 from stable_baselines.common.policies import MlpPolicy
-from stable_baselines.common.vec_env import SubprocVecEnv
+from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.misc_util import set_global_seeds
 
 from custom_envs.multiagent import EnvironmentInSync
 from custom_envs.utils.utils_common import create_env
+from custom_envs.utils.utils_venv import SubprocVecEnv
 
 LOGGER = logging.getLogger(__name__)
 
 def run_agent(envs, alg, learning_rate, gamma, seed, path):
     set_global_seeds(seed)
     # The algorithms require a vectorized environment to run
+    #dummy_env = DummyVecEnv(envs)
     dummy_env = SubprocVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
