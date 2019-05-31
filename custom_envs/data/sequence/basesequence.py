@@ -16,3 +16,7 @@ class BaseSequence(ABC):
     @abstractmethod
     def __getitem__(self, idx):
         pass
+
+    @abstractmethod
+    def shuffle(self):
+        pass
