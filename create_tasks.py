@@ -42,9 +42,9 @@ def main():
 
     columns = ['alg', 'learning_rate', 'gamma', 'seed']
     hyperparams = {}
-    hyperparams['seed'] = list(range(20))
-    hyperparams['gamma'] = 10**np.linspace(0, -1, 10)
-    hyperparams['learning_rate'] = 10**np.linspace(-1, -3, 10)
+    hyperparams['seed'] = list(range(3))
+    hyperparams['gamma'] = 10**np.linspace(0, -1, 5)
+    hyperparams['learning_rate'] = 10**np.linspace(-2, -4, 5)
     hyperparams['alg'] = ['A2C', 'PPO']
 
     dataframe = populate_table(hyperparams)
