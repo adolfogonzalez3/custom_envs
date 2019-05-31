@@ -27,8 +27,8 @@ LOGGER = logging.getLogger(__name__)
 def run_agent(envs, alg, learning_rate, gamma, seed, path):
     set_global_seeds(seed)
     # The algorithms require a vectorized environment to run
-    #dummy_env = DummyVecEnv(envs)
-    dummy_env = SubprocVecEnv(envs)
+    dummy_env = DummyVecEnv(envs)
+    #dummy_env = SubprocVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
                      learning_rate=learning_rate, verbose=1)
@@ -39,7 +39,7 @@ def run_agent(envs, alg, learning_rate, gamma, seed, path):
         model = DDPG(ddpg.MlpPolicy, dummy_env, gamma=gamma, verbose=1,
                      actor_lr=learning_rate/10, critic_lr=learning_rate)
     try:
-        model.learn(total_timesteps=10**4)
+        model.learn(total_timesteps=10**6)
         model.save(path)
     except tf.errors.InvalidArgumentError as error:
         LOGGER.error('Possible Nan, {!s}'.format((alg, learning_rate, gamma)))
@@ -54,7 +54,7 @@ def run_handle(env):
 def run_experiment_multiagent(parameters):
     alg, learning_rate, gamma, seed, save_to = parameters
     env_name = 'Optimize-v0'
-    num_of_envs = 1 if alg == 'DDPG' else 2
+    num_of_envs = 1 if alg == 'DDPG' else 32
     task_name = '{}-{:.4f}-{:.4f}-{:d}'.format(alg, learning_rate, gamma, seed)
     save_to = Path(save_to, task_name)
     num_of_agents = 10
@@ -94,7 +94,7 @@ def run_experiment_multiagent(parameters):
             for task in tasks:
                 task.join()
             shutil.make_archive(str(save_to), 'zip', str(log_dir))
-    return parameters
+    return parameters[:-1]
 
 def main_database(filename_db, filepath_exp):
     with sqlite3.connect(filename_db) as conn:

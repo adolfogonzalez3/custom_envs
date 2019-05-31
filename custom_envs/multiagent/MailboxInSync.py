@@ -50,13 +50,13 @@ class Mailbox:
         self.close()
 
 
-def create_mailbox():#manager):
+def create_mailbox(manager):
     host, client = create_pipe()
-    #host = manager.Queue()
-    #client = manager.Queue()
-    #pipe = PipeQueue(host, client)
-    #return Mailbox(pipe), Mailbox(pipe.reverse())
-    return Mailbox(host), Mailbox(client)
+    host = manager.Queue()
+    client = manager.Queue()
+    pipe = PipeQueue(host, client)
+    return Mailbox(pipe), Mailbox(pipe.reverse())
+    #return Mailbox(host), Mailbox(client)
 
 
 class MailboxInSync(object):
@@ -69,12 +69,12 @@ class MailboxInSync(object):
 
     def __init__(self):
         self.mailboxes = []
-        #self.manager = mp.Manager()
+        self.manager = mp.Manager()
         #self.manager.start()
         #self.manager.get_server().serve_forever()
 
     def spawn(self):
-        owner, client = create_mailbox()
+        owner, client = create_mailbox(self.manager)
         self.mailboxes.append(owner)
         return client
 
