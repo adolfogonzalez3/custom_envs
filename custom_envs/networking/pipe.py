@@ -48,6 +48,9 @@ class PipeQueue(BasePipe):
     def reverse(self):
         return PipeQueue(self.client, self.host)
 
+    def close(self):
+        pass
+
 
 class ZMQQueueServer(BasePipe):
     def __init__(self, host_name='tcp://127.0.0.1'):
