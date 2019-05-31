@@ -70,7 +70,8 @@ class MailboxInSync(object):
     def __init__(self):
         self.mailboxes = []
         self.manager = mp.Manager()
-        self.manager.start()
+        #self.manager.start()
+        self.manager.get_server().serve_forever()
 
     def spawn(self):
         owner, client = create_mailbox(self.manager)
