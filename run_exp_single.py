@@ -17,14 +17,15 @@ from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.misc_util import set_global_seeds
 
 from custom_envs.utils.utils_logging import Monitor
-from custom_envs.utils.utils_venv import SubprocVecEnv
+from custom_envs.utils.utils_venv import SubprocVecEnv, ThreadVecEnv
 
 LOGGER = logging.getLogger(__name__)
 
 def run_agent(envs, alg, learning_rate, gamma, seed, path):
     set_global_seeds(seed)
     #dummy_env = DummyVecEnv(envs)
-    dummy_env = SubprocVecEnv(envs)
+    #dummy_env = SubprocVecEnv(envs)
+    dummy_env = ThreadVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
                      learning_rate=learning_rate, verbose=1)
@@ -35,7 +36,7 @@ def run_agent(envs, alg, learning_rate, gamma, seed, path):
         model = DDPG(ddpg.MlpPolicy, dummy_env, gamma=gamma, verbose=1,
                      actor_lr=learning_rate/10, critic_lr=learning_rate)
     try:
-        model.learn(total_timesteps=10**4)
+        model.learn(total_timesteps=10**5)
     except tf.errors.InvalidArgumentError:
         LOGGER.error('Possible Nan, {!s}'.format((alg, learning_rate, gamma)))
     finally:
@@ -95,11 +96,11 @@ def loop_over_json_file():
     args = parser.parse_args()
     dataframe = pd.read_json(args.file_path, orient='records', lines=True)
     parameters_list = dataframe.to_dict(orient='records')
-    with ProcessPoolExecutor(8) as executor:
-        executor.map(run_experiment, parameters_list)
-        #for parameters in parameters_list:
-        #    print(parameters)
-        #    run_experiment(parameters)
+    #with ProcessPoolExecutor(1) as executor:
+    #    executor.map(run_experiment, parameters_list)
+    for parameters in parameters_list[:1]:
+        print(parameters)
+        run_experiment(parameters)
 
 def single_task_json():
     import argparse

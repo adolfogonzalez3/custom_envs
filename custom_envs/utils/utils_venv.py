@@ -1,4 +1,5 @@
 import multiprocessing as mp
+from threading import Thread
 from collections import OrderedDict
 
 import gym
@@ -9,6 +10,7 @@ from stable_baselines.common.tile_images import tile_images
 
 from custom_envs.networking import create_pipe
 
+
 def get_context(start_method):
     '''Get a new multiprocessing context.'''
     if start_method is None:
@@ -18,8 +20,8 @@ def get_context(start_method):
         start_method = 'forkserver' if forkserver_available else 'spawn'
     return mp.get_context(start_method)
 
-def _worker(remote, parent_remote, env_fn_wrapper):
-    #parent_remote.close()
+
+def _worker(remote, env_fn_wrapper):
     env = env_fn_wrapper.var()
     try:
         while True:
@@ -55,51 +57,31 @@ def _worker(remote, parent_remote, env_fn_wrapper):
         env.close()
 
 
-class SubprocVecEnv(VecEnv):
+class ConcurrentVecEnv(VecEnv):
     """
-    Creates a multiprocess vectorized wrapper for multiple environments
+    Creates a concurrent vectorized wrapper for multiple environments
 
     :param env_fns: ([Gym Environment]) Environments to run in subprocesses
-    :param start_method: (str) method used to start the subprocesses.
-           Must be one of the methods returned by
-           multiprocessing.get_all_start_methods(). Defaults to 'forkserver' on
-           available platforms, and 'spawn' otherwise. Both 'forkserver' and
-           'spawn' are thread-safe, which is important when TensorFlow sessions
-           or other non thread-safe libraries are used in the parent
-           (see issue #217). However, compared to 'fork' they incur a small
-           start-up cost and have restrictions on global variables.
-           For more information, see the multiprocessing documentation.
+    :param create_method: (str) method used to start the concurrent units.
+                                Should create an object which implements
+                                python's Thread api.
     """
 
-    def __init__(self, env_fns, start_method=None):
+    def __init__(self, env_fns, create_method):
         self.waiting = False
         self.closed = False
         n_envs = len(env_fns)
 
-        ctx = get_context(start_method)
-
-        if False:
-            self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
-            self.processes = []
-            for work_remote, remote, env_fn in zip(self.work_remotes, self.remotes, env_fns):
-                args = (work_remote, remote, CloudpickleWrapper(env_fn))
-                # daemon=True: if the main process crashes, we should not cause things to hang
-                process = ctx.Process(target=_worker, args=args, daemon=True)
-                process.start()
-                self.processes.append(process)
-                #work_remote.close()
-        else:
-            self.remotes, self.work_remotes = zip(*[create_pipe()
-                                                    for _ in range(n_envs)])
-            self.processes = []
-            for work_remote, remote, env_fn in zip(self.work_remotes, self.remotes, env_fns):
-                args = (work_remote, None, CloudpickleWrapper(env_fn))
-                # daemon=True: if the main process crashes, we should not cause
-                # things to hang
-                process = ctx.Process(target=_worker, args=args, daemon=True)
-                process.start()
-                self.processes.append(process)
-                #work_remote.close()
+        self.remotes, self.work_remotes = zip(*[create_pipe()
+                                                for _ in range(n_envs)])
+        self.processes = []
+        for work_remote, env_fn in zip(self.work_remotes, env_fns):
+            args = (work_remote, CloudpickleWrapper(env_fn))
+            # daemon=True: if the main process crashes, we should not cause
+            # things to hang
+            process = create_method(target=_worker, args=args, daemon=True)
+            process.start()
+            self.processes.append(process)
 
         self.remotes[0].send(('get_spaces', None))
         observation_space, action_space = self.remotes[0].recv()
@@ -168,7 +150,8 @@ class SubprocVecEnv(VecEnv):
         """
 
         for remote in self.remotes:
-            remote.send(('env_method', (method_name, method_args, method_kwargs)))
+            remote.send(
+                ('env_method', (method_name, method_args, method_kwargs)))
         return [remote.recv() for remote in self.remotes]
 
     def get_attr(self, attr_name):
@@ -216,16 +199,60 @@ def _flatten_obs(obs, space):
             A flattened NumPy array or an OrderedDict or tuple of flattened numpy arrays.
             Each NumPy array has the environment index as its first axis.
     """
-    assert isinstance(obs, (list, tuple)), "expected list or tuple of observations per environment"
+    assert isinstance(
+        obs, (list, tuple)), "expected list or tuple of observations per environment"
     assert len(obs) > 0, "need observations from at least one environment"
 
     if isinstance(space, gym.spaces.Dict):
-        assert isinstance(space.spaces, OrderedDict), "Dict space must have ordered subspaces"
-        assert isinstance(obs[0], dict), "non-dict observation for environment with Dict observation space"
+        assert isinstance(
+            space.spaces, OrderedDict), "Dict space must have ordered subspaces"
+        assert isinstance(
+            obs[0], dict), "non-dict observation for environment with Dict observation space"
         return OrderedDict([(k, np.stack([o[k] for o in obs])) for k in space.spaces.keys()])
     elif isinstance(space, gym.spaces.Tuple):
-        assert isinstance(obs[0], tuple), "non-tuple observation for environment with Tuple observation space"
+        assert isinstance(
+            obs[0], tuple), "non-tuple observation for environment with Tuple observation space"
         obs_len = len(space.spaces)
         return tuple((np.stack([o[i] for o in obs]) for i in range(obs_len)))
     else:
         return np.stack(obs)
+
+class SubprocVecEnv(ConcurrentVecEnv):
+    """
+    Creates a multiprocess vectorized wrapper for multiple environments
+
+    :param env_fns: ([Gym Environment]) Environments to run in subprocesses
+    :param start_method: (str) method used to start the subprocesses.
+           Must be one of the methods returned by
+           multiprocessing.get_all_start_methods(). Defaults to 'forkserver' on
+           available platforms, and 'spawn' otherwise. Both 'forkserver' and
+           'spawn' are thread-safe, which is important when TensorFlow sessions
+           or other non thread-safe libraries are used in the parent
+           (see issue #217). However, compared to 'fork' they incur a small
+           start-up cost and have restrictions on global variables.
+           For more information, see the multiprocessing documentation.
+    """
+
+    def __init__(self, env_fns, start_method=None):
+        ctx = get_context(start_method)
+        super().__init__(env_fns, ctx.Process)
+
+
+class ThreadVecEnv(ConcurrentVecEnv):
+    """
+    Creates a threaded vectorized wrapper for multiple environments
+
+    :param env_fns: ([Gym Environment]) Environments to run in subprocesses
+    :param start_method: (str) method used to start the subprocesses.
+           Must be one of the methods returned by
+           multiprocessing.get_all_start_methods(). Defaults to 'forkserver' on
+           available platforms, and 'spawn' otherwise. Both 'forkserver' and
+           'spawn' are thread-safe, which is important when TensorFlow sessions
+           or other non thread-safe libraries are used in the parent
+           (see issue #217). However, compared to 'fork' they incur a small
+           start-up cost and have restrictions on global variables.
+           For more information, see the multiprocessing documentation.
+    """
+
+    def __init__(self, env_fns):
+        super().__init__(env_fns, Thread)
