@@ -5,7 +5,7 @@
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 chmod +x Miniconda3-latest-Linux-x86_64.sh
 ./Miniconda3-latest-Linux-x86_64.sh -b
-~/miniconda3/condabin/conda create --channel conda-forge -yn tensorflow tensorflow numpy scipy pillow numexpr matplotlib mpi4py tqdm pyzmq opencv git-lfs
+~/miniconda3/condabin/conda create --channel conda-forge -yn tensorflow tensorflow numpy scipy pillow numexpr matplotlib mpi4py tqdm pyzmq opencv git-lfs pandas
 
 ~/miniconda3/condabin/conda run -n tensorflow pip install gym
 
