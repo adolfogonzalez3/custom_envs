@@ -8,17 +8,17 @@ from custom_envs.utils.utils_image import resize_all
 from custom_envs.utils.utils_common import to_onehot, normalize
 
 def load_mnist(name='fashion', kind='train'):
-    import gzip
+    import lzma
 
     """Load MNIST data from `path`"""
     path = Path(__file__).resolve().parent
-    labels_path = path / name / ('%s-labels-idx1-ubyte.gz' % kind)
-    images_path = path / name / ('%s-images-idx3-ubyte.gz' % kind)
+    labels_path = path / name / ('%s-labels-idx1-ubyte.xz' % kind)
+    images_path = path / name / ('%s-images-idx3-ubyte.xz' % kind)
 
-    with gzip.open(labels_path, 'rb') as lbpath:
+    with lzma.open(labels_path, 'rb') as lbpath:
         labels = np.frombuffer(lbpath.read(), dtype=np.uint8, offset=8)
 
-    with gzip.open(images_path, 'rb') as imgpath:
+    with lzma.open(images_path, 'rb') as imgpath:
         images = np.frombuffer(imgpath.read(), dtype=np.uint8,
                                offset=16).reshape(len(labels), 784)
 
