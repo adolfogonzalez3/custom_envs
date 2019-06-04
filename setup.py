@@ -14,7 +14,10 @@ setup(name='custom_envs',
           'numpy',
           'numexpr',
           'gym',
-          'pandas'
+          'pandas',
+          'matplotlib',
+          'tqdm',
+          'pillow'
       ],
       extras_require={
 
