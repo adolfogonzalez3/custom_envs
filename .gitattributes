@@ -1,4 +1,2 @@
 *.npz filter=lfs diff=lfs merge=lfs -text
-*.txt filter=lfs diff=lfs merge=lfs -text
-*-ubyte.gz filter=lfs diff=lfs merge=lfs -text
 *-ubyte.xz filter=lfs diff=lfs merge=lfs -text
