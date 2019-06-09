@@ -11,3 +11,5 @@ __pycache__
 *.zip
 *.7z
 *.db
+*.txt
+*.gz
