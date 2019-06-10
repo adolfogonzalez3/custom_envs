@@ -1,9 +1,7 @@
 '''A module that contains an abstract environment class.'''
 
-from abc import ABC, abstractmethod
-from contextlib import contextmanager
+from abc import abstractmethod
 
-import numpy.random as npr
 from gym import Env
 from gym.utils.seeding import np_random
 
@@ -58,6 +56,7 @@ class BaseEnvironment(Env):
     def base_reset(self):
         pass
 
+
 class BaseMultiEnvironment(Env):
     '''
     An abstract class inherited by all Multi agent environments in the package.
@@ -87,7 +86,7 @@ class BaseMultiEnvironment(Env):
         self.current_step += 1
         with use_random_state(self.random_generator):
             states, rewards, terminals, infos = self.base_step(action)
-        for name, value in infos.items():
+        for name in infos.keys():
             infos[name].update({'r': rewards[name], 'l': self.current_step})
         return states, rewards, terminals, infos
 

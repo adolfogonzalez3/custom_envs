@@ -1,4 +1,6 @@
-
+'''
+Init file for custom_envs.envs subpackage.
+'''
 from custom_envs.envs.baseenvironment import BaseEnvironment
 from custom_envs.envs.baseenvironment import BaseMultiEnvironment
 from custom_envs.envs.optimize import Optimize

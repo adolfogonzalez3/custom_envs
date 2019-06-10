@@ -8,7 +8,7 @@ from gym.spaces import Box
 from custom_envs import load_data
 from custom_envs.models import ModelNumpy as Model
 #from custom_envs.models import ModelKeras as Model
-from custom_envs.envs import BaseEnvironment, BaseMultiEnvironment
+from custom_envs.envs import BaseMultiEnvironment
 
 # SOURCE:
 # https://github.com/rlpy/rlpy/blob/master/rlpy/Domains/Acrobot.py
@@ -190,16 +190,3 @@ class MultiOptLRs(BaseMultiEnvironment):
 
     def close(self):
         pass
-
-
-def __main():
-    from stable_baselines.ppo2 import PPO2
-    from stable_baselines.common.policies import MlpPolicy
-    from stable_baselines.common.vec_env import DummyVecEnv
-    env = DummyVecEnv([OptLRs])
-    agent = PPO2(MlpPolicy, env, verbose=1)
-    agent.learn(total_timesteps=10**2)
-
-
-if __name__ == '__main__':
-    __main()

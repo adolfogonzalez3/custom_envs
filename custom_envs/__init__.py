@@ -1,7 +1,11 @@
+'''
+Init file for custom_envs package.
+
+Contains all registering calls to gym.
+'''
+from gym.envs.registration import register
 
 from custom_envs.data import load_data
-
-from gym.envs.registration import register
 
 # Experiments
 
