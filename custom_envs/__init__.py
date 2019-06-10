@@ -24,3 +24,8 @@ register(
     id='OptimizeCorrect-v0',
     entry_point='custom_envs.envs.optimizecorrect:OptimizeCorrect'
 )
+
+register(
+    id='MultiOptLRs-v0',
+    entry_point='custom_envs.envs.multioptlrs:MultiOptLRs'
+)
