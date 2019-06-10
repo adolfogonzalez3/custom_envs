@@ -72,7 +72,6 @@ def cross_entropy(p, y):
     :param p: (numpy.array) An array of predictions of similar shape to y.
     :param y: (numpy.array) An array of ground truths.
     '''
-    #p_log = np.nan_to_num(np.log(p))
     p_log = np.log(p+1e-16)
     return np.mean(np.sum(-p_log*y, axis=1))
 
@@ -140,7 +139,7 @@ def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
         log_dir = Path(log_dir)
         envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
                         info_keywords=('objective', 'accuracy'),
-                        chunk_size=1024)
+                        chunk_size=10)
                 for i, env in enumerate(envs)]
     return envs
 

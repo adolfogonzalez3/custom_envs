@@ -1,4 +1,4 @@
-
+'''Utilities for manipulating pandas DataFrames.'''
 from itertools import product
 
 import numpy as np
@@ -34,23 +34,53 @@ def create_grid(dataframe, levels=3):
     """
     Create grids and groups of rows based on a tiered index.
 
-    :param dataframe: (pandas.DataFrame) A dataframe contained a tiered index
-                                         containing at least (levels) levels.
+    :param dataframe: (pandas.DataFrame) A dataframe containing a tiered index.
     :param levels: (int) The number of levels to index by.
     """
-    idxs_groups = list(iterate_levels(dataframe, levels))
-    idxs, groups = zip(*idxs_groups)
-    idxs = zip(*idxs)
+    indexes_groups = list(iterate_levels(dataframe, levels))
+    indexes, groups = zip(*indexes_groups)
+    indexes = zip(*indexes)
     grid_shape = [len(l) for l in dataframe.index.levels[:levels]]
-    grids = [np.array(idx).reshape(grid_shape) for idx in idxs]
+    grids = [np.reshape(index, grid_shape) for index in indexes]
     return grids, groups
 
-def max_group(dataframe, by, column, method='mean'):
-    groups = dataframe.groupby(by)
-    if method == 'mean':
-        return groups.mean()[column].idxmax()
 
-def min_group(dataframe, by, column, method='mean'):
-    groups = dataframe.groupby(by)
+def apply_method(dataframe, method):
+    """
+    Apply method to dataframe.
+
+    :param dataframe: (pandas.DataFrame) The dataframe to apply to the method.
+    :param method: (str) The method to apply to the method.
+    """
     if method == 'mean':
-        return groups.mean()[column].idxmin()
+        return dataframe.mean()
+    else:
+        raise RuntimeError('No method named: {}'.format(method))
+
+
+def max_group(dataframe, groupby, column, method='mean'):
+    """
+    Get the group with max value after applying a method.
+
+    :param dataframe: (pandas.DataFrame) The dataframe to use.
+    :param by: ([str]) A list of columns to group by.
+    :param column: (str) The column to target.
+    :param method: (str) The method to apply to the dataframe.
+    """
+    groups = dataframe.groupby(groupby)
+    group_applied = apply_method(groups, method)
+    return group_applied[column].idmax()
+
+
+def min_group(dataframe, groupby, column, method='mean'):
+    """
+    Get the group with min value after applying a method.
+
+    :param dataframe: (pandas.DataFrame) The dataframe to use.
+    :param by: ([str]) A list of columns to group by.
+    :param column: (str) The column to target.
+    :param method: (str) The method to apply to the dataframe.
+    """
+    groups = dataframe.groupby(groupby)
+    groups_applied = apply_method(groups, method)
+    return groups_applied[column].idxmin()
