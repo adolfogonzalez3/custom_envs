@@ -44,7 +44,7 @@ class Optimize(BaseEnvironment):
         feature_size = self.sequence.feature_shape[0]
         self.model = Model(feature_size, num_of_labels)
         past_history = 3
-        self.loss_hist = np.zeros(past_history)
+        self.loss_hist = np.zeros((past_history, 1))
         self.grad_hist = np.zeros((past_history, feature_size,
                                    num_of_labels))
         self.wght_hist = np.zeros(self.grad_hist.shape)
@@ -62,12 +62,14 @@ class Optimize(BaseEnvironment):
         self.wght_hist.fill(0)
         self.model.reset(npr)
         self.sequence.shuffle()
-        return np.concatenate([self.wght_hist[0].ravel(), self.loss_hist[[0]],
+        return np.concatenate([self.wght_hist[0].ravel(),
+                               self.loss_hist[0].ravel(),
                                self.grad_hist[0].ravel()])
 
     def base_step(self, a):
         idx = self.current_step % len(self.loss_hist)
 
+        #features, labels = self.sequence[self.current_step]
         features, labels = self.sequence[0]
         self.model.set_weights(self.model.weights -
                                a.reshape((-1, self.wght_hist.shape[-1])))
@@ -76,7 +78,7 @@ class Optimize(BaseEnvironment):
         grad = grad / len(features)
 
         np.divide(loss - self.loss_hist[idx-1],
-                  self.loss_hist[idx-1] + 0.1, out=self.loss_hist[[idx]])
+                  self.loss_hist[idx-1] + 0.1, out=self.loss_hist[idx])
         np.divide(grad, np.abs(self.grad_hist[idx-1]) + 1,
                   out=self.grad_hist[idx])
         np.divide(np.abs(self.wght_hist[idx-1] - self.wght_hist[idx-2]),
@@ -84,11 +86,17 @@ class Optimize(BaseEnvironment):
                   out=self.wght_hist[idx])
 
         state = np.concatenate([self.wght_hist[idx].ravel(),
-                                self.loss_hist[[idx]],
+                                self.loss_hist[idx].ravel(),
                                 self.grad_hist[idx].ravel()])
         reward = -loss
         terminal = self._terminal()
+        
+        features = self.sequence.features
+        labels = self.sequence.labels
+        loss, _, accu = self.model.compute_backprop(features, labels)
         info = {'objective': loss, 'accuracy': accu}
+        #print(self.wght_hist[idx])
+        #print(self.grad_hist[idx])
         return state, reward, terminal, info
 
     def _terminal(self):
