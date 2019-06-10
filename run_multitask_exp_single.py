@@ -20,9 +20,10 @@ from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.misc_util import set_global_seeds
 
-from custom_envs.multiagent import EnvironmentInSync
+from custom_envs.multiagent import EnvironmentInSync, MultiEnvServer
 from custom_envs.utils.utils_logging import Monitor
 from custom_envs.utils.utils_venv import SubprocVecEnv, ThreadVecEnv
+from custom_envs.envs.multioptlrs import MultiOptLRs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,12 +74,13 @@ def run_experiment(parameters):
         log_dir.mkdir(parents=True)
         with (log_dir / 'hyperparams.txt').open('wt') as json_file:
             json_file.write(str(parameters))
-        env = gym.make(env_name, data_set='iris')
+        #env = gym.make(env_name, data_set='iris')
+        env = MultiOptLRs(data_set='iris')
         env.seed(seed)
         model_path = str(log_dir / 'model.pkl')
         log_path = str(log_dir / 'monitor_{:d}')
         print('Creating in sync')
-        env = EnvironmentInSync(env, num_of_agents)
+        main_environment = MultiEnvServer(env)
         print('Creating partials')
         envs_callable = [partial(Monitor,
                                  subenv,
@@ -86,18 +88,19 @@ def run_experiment(parameters):
                                  allow_early_resets=True,
                                  info_keywords=('objective', 'accuracy'),
                                  chunk_size=10)
-                         for i, subenv in enumerate(env.sub_envs)]
+                         for i, subenv in
+                         enumerate(main_environment.sub_environments.values())]
         print('Trying')
         try:
-            task = Thread(target=run_handle, args=[env])
-            
+            task = Thread(target=run_handle, args=[main_environment])
+
             print('Running')
             taskrun = Thread(target=run_agent,
                              args=[envs_callable, alg, learning_rate, gamma,
                                    seed, model_path])
             task.start()
             taskrun.start()
-            #run_agent(envs_callable, alg, learning_rate, gamma, seed,
+            # run_agent(envs_callable, alg, learning_rate, gamma, seed,
             #          model_path)
             task.join()
             taskrun.join()
@@ -135,7 +138,7 @@ def loop_over_json_file():
 
 
 def main():
-    parameters = {"alg": "PPO", "env_name": "OptimizeCorrect-v0", "gamma": 0.9,
+    parameters = {"alg": "PPO", "env_name": "MultiOptLRs-v0", "gamma": 0.9,
                   "learning_rate": 0.001, "path": "results_iriss", "seed": 0}
     run_experiment(parameters)
 
