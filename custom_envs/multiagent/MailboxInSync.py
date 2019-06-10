@@ -51,12 +51,10 @@ class Mailbox:
 
 
 def create_mailbox(manager):
-    host, client = create_pipe()
     host = manager.Queue()
     client = manager.Queue()
     pipe = PipeQueue(host, client)
     return Mailbox(pipe), Mailbox(pipe.reverse())
-    #return Mailbox(host), Mailbox(client)
 
 
 class MailboxInSync(object):
@@ -70,8 +68,6 @@ class MailboxInSync(object):
     def __init__(self):
         self.mailboxes = []
         self.manager = mp.Manager()
-        #self.manager.start()
-        #self.manager.get_server().serve_forever()
 
     def spawn(self):
         owner, client = create_mailbox(self.manager)
@@ -114,39 +110,3 @@ class MailboxInSync(object):
 
     def __exit__(self, a, b, c):
         pass
-
-
-NUM_STEPS = 10**2
-
-def task(L):
-    for i in range(NUM_STEPS):
-        L.append(i)
-        L.get()
-
-def __main():
-    from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-    from multiprocessing import Process
-    from threading import Thread
-    from time import time
-
-    mailbox = MailboxInSync()
-    begin = time()
-    tasks = [Process(target=task, args=(mailbox.spawn(),))
-             for _ in range(3)]
-    for t in tasks:
-        t.start()
-    print('Loaded in {:.6} seconds.'.format(time() - begin))
-    begin = time()
-    for _ in range(NUM_STEPS):
-        _ = mailbox.get()
-        mailbox.append([i for i in range(3)])
-    for t in tasks:
-        t.join()
-    time_elapsed = time() - begin
-    time_per_transfer = time_elapsed / NUM_STEPS
-    print(('Done in {:.6} seconds or {:.6} seconds per '
-           'transfer.').format(time_elapsed, time_per_transfer))
-
-
-if __name__ == '__main__':
-    __main()
