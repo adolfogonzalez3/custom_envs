@@ -7,7 +7,7 @@ from gym import Env
 from gym.spaces import Box
 import numpy as np
 
-from custom_envs.multiagent.MailboxInSync import MailboxInSync
+from custom_envs.multiagent import MailboxDict
 
 StepReturnType = namedtuple('StepReturnType',
                             ['states', 'rewards', 'terminals', 'infos'])
@@ -66,7 +66,7 @@ class EnvSpawn(Env):
         response = self._mailbox.get()
         return response
 
-    def render(self):
+    def render(self, mode='human'):
         request = EnvRequest(RequestType.RENDER, None)
         self._mailbox.append(request)
 
@@ -83,33 +83,42 @@ class MultiEnvServer:
 
     def __init__(self, environment):
         self.main_environment = environment
-        self.mailbox = MailboxInSync()
+        self.mailbox = MailboxDict()
         self.observation_spaces = environment.observation_spaces
         self.action_spaces = environment.action_spaces
         self.sub_environments = {name:
                                  EnvSpawn(self.observation_spaces[name],
                                           self.action_spaces[name],
-                                          self.mailbox.spawn())
+                                          self.mailbox.spawn(name))
                                  for name in self.action_spaces.keys()
                                  }
 
     def handle_requests(self, timeout=None):
+        '''
+        Handle any incoming messages.
+
+        :param timeout: (int or None) If int then will poll for at least
+                                      `timeout` seconds before erroring else
+                                      if None then will wait indefinitely.
+        :return: (dict) If a dictionary then will contain the current
+                                data that has been received
+        '''
         requests = self.mailbox.get(timeout=timeout)
         if requests is None:
-            data = []
-        elif all([r.type == RequestType.RESET for r in requests]):
-            obs = self.main_environment.reset()
-            self.mailbox.append([obs]*len(self.sub_environments))
+            data = {}
+        elif all([r.type == RequestType.RESET for r in requests.values()]):
+            observations = self.main_environment.reset()
+            self.mailbox.append(observations)
             data = self.handle_requests()
-        elif all([r.type == RequestType.CLOSE for r in requests]):
+        elif all([r.type == RequestType.CLOSE for r in requests.values()]):
             data = None
-        elif all([r.type == RequestType.STEP for r in requests]):
-            action = np.concatenate([r.data for r in requests])
-            action = action.reshape(self.main_environment.action_space.shape)
-            data = self.main_environment.step(action)
-            agent_data = [deepcopy(data)
-                          for _ in enumerate(self.sub_environments)]
-            self.mailbox.append(agent_data)
+        elif all([r.type == RequestType.STEP for r in requests.values()]):
+            action = {name: rqst.data for name, rqst in requests.items()}
+            states, rewards, dones, infos = self.main_environment.step(action)
+            data = {name: (states[name], rewards[name], dones[name],
+                           infos[name])
+                    for name in states.keys()}
+            self.mailbox.append(data)
         else:
             raise RuntimeError('Requests are inconsistent.')
         return data
