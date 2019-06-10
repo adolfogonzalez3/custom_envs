@@ -1,8 +1,6 @@
 
-
-from itertools import chain
-
-from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
+import random
+from itertools import chain, product
 
 import gym
 import pytest
@@ -11,42 +9,45 @@ import pandas as pd
 
 import custom_envs.utils.utils_pandas as utils
 
-def create_dataframe():
-    data = [[{'a': i, 'b': j, 'c': 0} for i in range(10)] for j in range(10)]
-    data = chain.from_iterable(data)
-    return pd.DataFrame(data)
+ROW_SIZES = tuple(range(20, 60, 20))
+GROUP_SIZES = tuple(range(3, 9, 3))
 
-def test_get_unique():
-    dataframe = pd.DataFrame(np.arange(25).reshape((5, 5)))
-    a, b, c = utils.get_unique(dataframe, 0, 2, 1)
-    assert a == [0, 5, 10, 15, 20]
-    assert c == [1, 6, 11, 16, 21]
-    assert b == [2, 7, 12, 17, 22]
+def create_dataframe(num_of_rows=20):
+    data = {chr(97 + i): np.arange(num_of_rows) % (i + 1)
+            for i in range(26)}
+    dataframe = pd.DataFrame.from_dict(data)
+    return dataframe
 
+@pytest.mark.parametrize("num_of_rows", ROW_SIZES)
+def test_get_unique(num_of_rows):
+    dataframe = create_dataframe(num_of_rows)
+    a, c, z= utils.get_unique(dataframe, 'a', 'c', 'z')
+    assert len(a) == 1
+    assert len(c) == 3
+    if num_of_rows < 26:
+        assert len(z) == 20
+    else:
+        assert len(z) == 26
 
-def test_get_unique_1():
+@pytest.mark.parametrize("group_size", GROUP_SIZES[:1])
+def test_iterate_levels(group_size):
     dataframe = create_dataframe()
-    a, b = utils.get_unique(dataframe, 'a', 'c')
-    assert len(a) == 10
-    assert len(b) == 1
-
-
-def test_iterate_levels():
-    dataframe = create_dataframe().groupby(['a', 'b']).mean()
-    idxs_groups = list(utils.iterate_levels(dataframe, 2))
+    print(list(dataframe.columns))
+    group = random.sample(list(dataframe.columns), group_size)
+    print(group)
+    dataframe = dataframe.groupby(group).mean()
+    print(dataframe)
+    idxs_groups = list(utils.iterate_levels(dataframe, group_size))
     idxs, groups = zip(*idxs_groups)
-    assert len(idxs) == 100
-    assert sum(len(g) for g in groups) == 100
+    #print(idxs)
+    #print(groups)
+    assert len(idxs) == np.prod([ord(g) - 97 for g in group])
+    assert sum(len(g) for g in groups) == np.prod([ord(g) - 97 for g in group])
 
 
-def test_create_grid():
+def jtest_create_grid():
     dataframe = create_dataframe().groupby(['a', 'b']).mean()
     (A, B), groups = utils.create_grid(dataframe, levels=2)
     assert A.shape == (10, 10)
     assert B.shape == (10, 10)
     
-
-
-
-if __name__ == '__main__':
-    test_iterate_levels()
