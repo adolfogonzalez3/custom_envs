@@ -1,172 +1,128 @@
 
 import os
 import subprocess
+from pathlib import Path
 from collections import Counter, defaultdict
-from itertools import product, cycle
+from itertools import product, cycle, chain
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from tqdm import trange
 
 import gym
 from stable_baselines.bench import Monitor
-from stable_baselines.common.policies import MlpPolicy
+from stable_baselines.common.policies import MlpPolicy, MlpLstmPolicy
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.misc_util import set_global_seeds
 
+import custom_envs
 
-def task(args):
-    env_name, seed, path = args
-    log_dir = os.path.join(path, env_name, 'ppo-{:d}'.format(seed))
-    save_path = os.path.join(path, env_name, 'ppo-{:d}'.format(seed), 'model')
-    env = gym.make(env_name)
+def plot(axis_obj, sequence, **kwargs):
+    axis_obj.plot(range(len(sequence)), sequence, **kwargs)
+
+def fill_between(axis_obj, mean, std, **kwargs):
+    axis_obj.fill_between(range(len(mean)), mean + std, mean - std, **kwargs)
+
+def add_legend(axis):
+    chartBox = axis.get_position()
+    axis.set_position([chartBox.x0, chartBox.y0, chartBox.width*0.8, chartBox.height])
+    axis.legend(loc='upper center', bbox_to_anchor=(1.2, 0.8), shadow=True, ncol=1)
+
+
+def task(path, seed):
+    alg, learning_rate, gamma, _ = path.name.split('-')
+    learning_rate = float(learning_rate)
+    gamma = float(gamma)
+    #env_name = 'OptimizeCorrect-v0'
+    env_name = 'OptLRs-v0'
+    save_path = path / 'model.pkl'
+    env = gym.make(env_name, data_set='mnist', batch_size=32, version=3)
+    #env = gym.make(env_name)
+    if alg == 'PPO':
+        with open(save_path, 'rb') as pkl:
+            model = PPO2.load(pkl)
+        #model = PPO2.load(save_path)
+        alg_num = 0
+    elif alg == 'A2C':
+        with open(save_path, 'rb') as pkl:
+            model = A2C.load(pkl)
+        alg_num = 1
+    elif alg == 'DDPG':
+        model = DDPG.load(save_path)
+        alg_num = 2
     env.seed(seed)
-    set_global_seeds(seed)
-
-    model = PPO2.load(save_path)
     obs = env.reset()
     terminal = False
-    accuracies = []
-    objectives = []
+    infos = []
     while not terminal:
+    #for _ in range(75000):
+    #for _ in range(1800):
         action, *_ = model.predict(obs)
-        obs, _, terminal, info = env.step(action)
-        accuracies.append(info['accuracy'])
-        objectives.append(info['objective'])
-    return accuracies, objectives
+        obs, reward, terminal, info = env.step(action)
+        info['step'] = len(infos)
+        info['reward'] = reward
+        info['seed'] = seed
+        infos.append(info)
+    return infos
 
-def task_lr(*args):
+def task_lr():
     import tensorflow as tf
     import tensorflow.keras as keras
 
-    from custom_envs.load_data import load_data
+    from custom_envs import load_data
     from custom_envs.utils import to_onehot
-    tf.set_random_seed(args[0])
-    data = load_data()
-    features = data[:, :-1]
-    labels = data[:, -1:]
+    features, labels = load_data('iris')
 
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(3, input_shape=features.shape[1:], activation='softmax'))
-    model.compile(tf.train.GradientDescentOptimizer(1e-2),
+    model.add(tf.keras.layers.Dense(3, input_shape=features.shape[1:],
+              activation='softmax'))
+    model.compile(tf.train.GradientDescentOptimizer(6e-2),
                   loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
-    hist = model.fit(features, labels, epochs=39, verbose=0)
-    return hist.history['acc'], hist.history['loss']
-
-def get_experiments(path):
-    experiments = os.listdir(path)
-    expr_names = [e.rsplit('-', 1)[0] for e in experiments]
-    return Counter(expr_names)
-    
-
-def run():
-    import argparse
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("path", help="The directory to save files to.")
-    ARGS = PARSER.parse_args()
-    PATH = [ARGS.path]
-    ENV_NAMES = os.listdir(ARGS.path)
-    with ProcessPoolExecutor() as executor:
-        results = []
-        for env_name in ENV_NAMES:
-            results.append(executor.map(task, product([env_name], range(10), PATH)))
-        lr_result = executor.map(task_lr, range(10))
-        results = [list(rs) for rs in results]
-        lr_result = list(lr_result)
-    for env_name, result in zip(ENV_NAMES, results):
-        accuracies, objectives = list(zip(*result))
-        accuracies = np.array(accuracies)
-        objectives = np.array(objectives)
-        mean_obj = np.mean(objectives, axis=0)
-        std_obj = np.std(objectives, axis=0)
-        plt.plot(range(len(mean_obj)), mean_obj, label=env_name)
-        #plt.ylim(0,1)
-        plt.fill_between(range(len(mean_obj)), mean_obj - std_obj,
-                         mean_obj+std_obj, alpha=0.1)
-        #plt.title(env_name)
-    accuracies, objectives = list(zip(*lr_result))
-    accuracies = np.array(accuracies)
-    objectives = np.array(objectives)
-    mean_obj = np.mean(objectives, axis=0)
-    std_obj = np.std(objectives, axis=0)
-    plt.plot(range(len(mean_obj)), mean_obj, label='LR minibatch')
-    #plt.ylim(0, 1)
-    plt.fill_between(range(len(mean_obj)), mean_obj - std_obj,
-                     mean_obj+std_obj, alpha=0.1)
-    plt.legend()
-    plt.title('Training for 39 epochs on the IRIS data set')
-    plt.ylabel('Loss')
-    plt.xlabel('Epochs')
-    plt.show()
-
-def task2(args):
-    (folder_name_partial, seeds), path = args
-    alg, _, learning_rate, _, gamma = folder_name_partial.split('_')
-    learning_rate = float(learning_rate)
-    gamma = float(gamma)
-    dataframes = []
-    for seed in range(seeds):
-        folder_name = '-'.join([folder_name_partial, str(seed)])
-        env_name = 'Optimize-v0'
-        alg = folder_name_partial.split('_', 1)[0]
-        log_dir = os.path.join(path, env_name, folder_name)
-        save_path = os.path.join(path, env_name, folder_name, 'model')
-        env = gym.make(env_name)
-        env.seed(seed)
-        set_global_seeds(seed)
-        alg_num = -1
-        if alg == 'PPO':
-            model = PPO2.load(save_path)
-            alg_num = 0
-        elif alg == 'A2C':
-            model = A2C.load(save_path)
-            alg_num = 1
-        elif alg == 'DDPG':
-            model = DDPG.load(save_path)
-            alg_num = 2
-        else:
-            print('ERROR: ', alg)
-        obs = env.reset()
-        terminal = False
-
-        data = defaultdict(list)
-        while not terminal:
-            action, *_ = model.predict(obs)
-            obs, _, terminal, info = env.step(action)
-            data['accuracy'].append(info['accuracy'])
-            data['objective'].append(info['objective'])
-        data['seed'] = [seed]*len(data['accuracy'])
-        data['learning_rate'] = [learning_rate]*len(data['accuracy'])
-        data['gamma'] = [gamma]*len(data['accuracy'])
-        data['alg'] = [alg_num]*len(data['accuracy'])
-        dataframes.append(pd.DataFrame(data))
-    return pd.concat(dataframes)
+    hist = model.fit(features, labels, epochs=39, verbose=1)
+    print(hist.history['acc'], hist.history['loss'])
+    return hist.history['acc'], hist.history['loss'] 
 
 def run_multi():
     import argparse
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("path", help="The directory to save files to.")
-    ARGS = PARSER.parse_args()
-    PATH = [ARGS.path]
-    ENV_NAMES = os.listdir(ARGS.path)
-    env_expr_dicts = [get_experiments(os.path.join(ARGS.path, env_name))
-                      for env_name in ENV_NAMES]
-    with ProcessPoolExecutor() as executor:
-        env_tasks = [
-            executor.map(task2, zip(expr_dict.items(), cycle(PATH)))
-            for env_name, expr_dict in zip(ENV_NAMES, env_expr_dicts)
-        ]
-        lr_result = executor.map(task_lr, range(3))
-        results = [list(rs) for rs in env_tasks]
-        lr_result = list(lr_result)
-    for env_name, result in zip(ENV_NAMES, results):
-        result_df = pd.concat(result)
-        result_df.reset_index(inplace=True)
-        result_df.to_csv('results_{}.csv'.format(env_name))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", help="The directory to save files to.")
+    args = parser.parse_args()
+    path = Path(args.path)
+    infos = list(chain.from_iterable([task(path, i) for i in trange(1)]))
+    dataframe = pd.DataFrame(infos)
+    mean = dataframe.groupby('step').mean()
+    std = dataframe.groupby('step').std()
+    #print(dataframe)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title('Performance on SKIN data set')
+    ax.set_ylabel('loss')
+    ax.set_xlabel('step')
+    plot(ax, mean['objective'])
+    fill_between(ax, mean['objective'], std['objective'], alpha=0.1)
+    add_legend(ax)
+
+
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title('Performance on SKIN data set')
+    ax.set_ylabel('accuracy')
+    ax.set_xlabel('step')
+    plot(ax, mean['accuracy'])
+    print(mean['accuracy'])
+    fill_between(ax, mean['accuracy'], std['accuracy'], alpha=0.1)
+    add_legend(ax)
+
+    plt.show()
+
+    dataframe.to_csv('skin_results.csv')
 
 
 if __name__ == '__main__':
     run_multi()
+    #task_lr()

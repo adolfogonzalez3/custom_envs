@@ -10,24 +10,14 @@ from tqdm import tqdm
 def load_expr(path):
     '''Load experiment in path.'''
     path = Path(path)
-    #monitor_name, seed = path.name.rsplit('-', 1)
     alg, learning_rate, gamma, seed = path.name.split('-')
     learning_rate = float(learning_rate)
     gamma = float(gamma)
     seed = int(seed)
-    #alg, _, learning_rate, _, gamma = monitor_name.split('-')
-    results_list = [pd.read_csv(mname, skiprows=1).assign(seed=seed + i)
-                    for i, mname in enumerate(path.glob('*monitor.csv'))]
-    #results_list = []
-    #for i, monitor_name in enumerate(path.glob('*monitor.csv')):
-    #    results = pd.read_csv(monitor_name, skiprows=1)
-    #    results['seed'] = seed + i
-    #    results_list.append(results)
+    results_list = [pd.read_csv(mname).assign(seed=seed + i)
+                    for i, mname in enumerate(path.glob('*.mon.csv'))]
     results = pd.concat(results_list).assign(alg=alg, gamma=gamma,
                                              learning_rate=learning_rate)
-    #results['alg'] = alg
-    #results['learning_rate'] = learning_rate
-    #results['gamma'] = gamma
     return results
 
 def load_exprs(path):
@@ -37,19 +27,8 @@ def load_exprs(path):
     with ProcessPoolExecutor() as executor:
         expr_dfs = list(tqdm(executor.map(load_expr, expr_paths, chunksize=32),
                              total=len(expr_paths)))
-        #expr_dfs = executor.map(load_expr, expr_paths)
-    return pd.concat(expr_dfs), expr_paths
+    return pd.concat(expr_dfs)
 
-
-def movingAverage(values, window):
-    """
-    Smooth values by doing a moving average
-    :param values: (numpy array)
-    :param window: (int)
-    :return: (numpy array)
-    """
-    weights = np.repeat(1.0, window) / window
-    return np.convolve(values, weights, 'valid')
 
 def main():
     import argparse
@@ -62,8 +41,7 @@ def main():
     #print(expr_dict)
     if path.is_dir():
         print('Loading...')
-        expr_df, experiment_names = load_exprs(path)
-        expr_df.reset_index(inplace=True)
+        expr_df = load_exprs(path).reset_index()
         print('Saving...')
         expr_df.to_pickle('{}.pkl'.format(args.name))
 

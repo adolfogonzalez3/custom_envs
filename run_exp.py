@@ -3,6 +3,7 @@ import os
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from itertools import product
+from functools import partial
 
 ENV_NAMES = ('Optimize-v0', 'OptLR-v0', 'OptLRs-v0')
 
@@ -15,7 +16,8 @@ from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.misc_util import set_global_seeds
 
-
+import custom_envs
+from custom_envs.utils.utils_common import create_env
 
 def task2(args):
     print(args)
@@ -37,29 +39,33 @@ def task2(args):
 def task_hyperparam(args):
     print(args)
     seed, path, env_name, learning_rate, gamma, alg = args
-    task_name = '{}_lr_{:.4f}_g_{:.4f}-{:d}'.format(alg, learning_rate, gamma,
+    task_name = '{}-{:.4f}-{:.4f}-{:d}'.format(alg, learning_rate, gamma,
                                                     seed)
     log_dir = os.path.join(path, env_name, task_name)
     save_path = os.path.join(path, env_name, task_name, 'model')
-    os.makedirs(log_dir)
-    env = gym.make(env_name)
-    env.seed(seed)
+    os.makedirs(log_dir, exist_ok=True)
+    #env = gym.make(env_name)
+    #env.seed(seed)
     set_global_seeds(seed)
-    env = Monitor(env, log_dir, allow_early_resets=True,
-                  info_keywords=('objective','accuracy'))
+    #env = Monitor(env, log_dir, allow_early_resets=True,
+    #              info_keywords=('objective', 'accuracy'))
     # The algorithms require a vectorized environment to run
-    env = DummyVecEnv([lambda: env])
+    #env = DummyVecEnv([lambda: env])
+    envs = [partial(lambda x: x, env)
+            for env in create_env(env_name, log_dir=log_dir, num_of_envs=32,
+                                  data_set='iris')]
+    env = DummyVecEnv(envs)  # The algorithms require a vectorized environment to run
 
     if alg == 'PPO':
         model = PPO2(MlpPolicy, env, gamma=gamma, learning_rate=learning_rate,
-                     verbose=0)
+                     verbose=1)
     elif alg == 'A2C':
         model = A2C(MlpPolicy, env, gamma=gamma, learning_rate=learning_rate,
                      verbose=0)
     else:
         model = DDPG(ddpg.MlpPolicy, env, gamma=gamma,  verbose=0,
                      actor_lr=learning_rate/10, critic_lr=learning_rate)
-    model.learn(total_timesteps=10**6)
+    model.learn(total_timesteps=10**5)
     model.save(save_path)
 
 def task(args):
@@ -100,18 +106,19 @@ def main_hyperparams():
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("save_folder", help="The directory to save files to.")
     PARSER.add_argument('--num_of_seeds', help='Number of seeds to run',
-                        default=20)
+                        default=1)
     ARGS = PARSER.parse_args()
     SEEDS = list(range(ARGS.num_of_seeds))
     PATH = [ARGS.save_folder]
     ENVS = ['Optimize-v0']
-    LEARNING_RATES = np.linspace(1, 1e-3, 10)
-    GAMMAS = np.linspace(1, 0, 10, False)
-    ALGS = ['PPO', 'A2C', 'DDPG']
+    LEARNING_RATES = [1e-3] # 10**np.linspace(-1, -3, 1)
+    GAMMAS = [1e-1] #np.linspace(1, 0, 1, False)
+    ALGS = ['PPO']
     task_details = product(SEEDS, PATH, ENVS, LEARNING_RATES, GAMMAS, ALGS)
-    
-    with ProcessPoolExecutor() as executor:
-        executor.map(task_hyperparam, task_details)
+    for task_detail in task_details:
+        task_hyperparam(task_detail)
+    #with ProcessPoolExecutor() as executor:
+    #    executor.map(task_hyperparam, task_details)
 
 
 if __name__ == '__main__':
