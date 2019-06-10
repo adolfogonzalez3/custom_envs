@@ -19,3 +19,8 @@ register(
     id='OptLRs-v0',
     entry_point='custom_envs.envs.optlrs:OptLRs'
 )
+
+register(
+    id='OptimizeCorrect-v0',
+    entry_point='custom_envs.envs.optimizecorrect:OptimizeCorrect'
+)

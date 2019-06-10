@@ -10,18 +10,17 @@ from custom_envs.models import ModelNumpy as Model
 #from custom_envs.models import ModelKeras as Model
 from custom_envs.envs import BaseEnvironment
 
-# SOURCE:
-# https://github.com/rlpy/rlpy/blob/master/rlpy/Domains/Acrobot.py
+__author__ = "Adolfo Gonzalez III <adolfo.gonzalez02@utrgv.edu>"
 
 
-class OptLRs(BaseEnvironment):
+class OptimizeCorrect(BaseEnvironment):
 
     """
     Summary:
     The optimize environment requires an agent to reduce the
     objective function of a target neural network on some dataset by changing
-    the per parameter learning rate. The action of the agent is used as the
-    the per parameter learning rate for a vanilla gradient descent algorithm.
+    the weights. The action of the agent is added to the current weights of
+    the target neural network.
 
     Target Network:
     The target network is a simple multiclass softmax classifier. The
@@ -34,6 +33,10 @@ class OptLRs(BaseEnvironment):
                        current gradient of the objective with respect to
                        the target network's parameters.
     """
+
+    metadata = {
+        'render.modes': []
+    }
 
     def __init__(self, data_set='mnist', batch_size=None, version=1):
         super().__init__()
@@ -58,7 +61,7 @@ class OptLRs(BaseEnvironment):
         #state_size = self.loss_hist.size + self.grad_hist.size + self.wght_hist.size
         self.observation_space = Box(low=-1e3, high=1e3, dtype=np.float32,
                                      shape=(state_size,))
-        # self.action_space = Box(low=-1e3, high=1e3, dtype=np.float32,
+        #self.action_space = Box(low=-1e3, high=1e3, dtype=np.float32,
         #                        shape=(self.model.size,))
         self.action_space = Box(low=0, high=1, dtype=np.float32,
                                 shape=(self.model.size,))
@@ -96,7 +99,7 @@ class OptLRs(BaseEnvironment):
         idx = self.current_step % len(self.loss_hist)
 
         seq_idx = self.current_step % len(self.sequence)
-        features, labels = self.sequence[seq_idx]
+        features, labels = self.sequence[0]
         loss, grad, accu = self.model.compute_backprop(features, labels)
         self.model.set_weights(self.model.weights -
                                grad*a.reshape((-1, self.wght_hist.shape[-1])))
@@ -113,8 +116,7 @@ class OptLRs(BaseEnvironment):
             mean_grad = np.mean(self.grad_hist)
             adjusted_grad = np.divide(grad, np.abs(mean_grad) + 1)
             prev_wght = np.abs(self.wght_hist[idx-1] - self.wght_hist[idx-2])
-            abs_wght = np.abs(
-                self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
+            abs_wght = np.abs(self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
             adjusted_wght = np.divide(prev_wght, abs_wght)
         else:
             adjusted_loss = np.divide(loss - self.loss_hist[idx-1],
@@ -122,14 +124,13 @@ class OptLRs(BaseEnvironment):
             adjusted_grad = np.divide(grad, np.abs(self.grad_hist[idx-1]) + 1)
             adjusted_grad = np.divide(grad, np.abs(self.grad_hist[idx-1]) + 1)
             prev_wght = np.abs(self.wght_hist[idx-1] - self.wght_hist[idx-2])
-            abs_wght = np.abs(
-                self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
+            abs_wght = np.abs(self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
             adjusted_wght = np.divide(prev_wght, abs_wght)
 
         self.adjusted_loss_hist[idx] = adjusted_loss
         self.adjusted_grad_hist[idx] = adjusted_grad
         self.adjusted_wght_hist[idx] = adjusted_wght
-
+        
         if self.version == 0:
             state = adjusted_grad.ravel()
         elif self.version == 1:
@@ -150,8 +151,8 @@ class OptLRs(BaseEnvironment):
             labels = self.sequence.labels
             loss, _, accu = self.model.compute_backprop(features, labels)
         info = {'objective': loss, 'accuracy': accu}
-        # print(reward)
-        return state, reward, terminal, info
+        #print(reward)
+        return state, reward*100, terminal, info
 
     def _terminal(self):
         return self.current_step >= 400
@@ -166,8 +167,9 @@ class OptLRs(BaseEnvironment):
 def __main():
     from stable_baselines.ppo2 import PPO2
     from stable_baselines.common.policies import MlpPolicy
+    from stable_baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
     from stable_baselines.common.vec_env import DummyVecEnv
-    env = DummyVecEnv([OptLRs])
+    env = DummyVecEnv([Optimize])
     agent = PPO2(MlpPolicy, env, verbose=1)
     agent.learn(total_timesteps=10**2)
 

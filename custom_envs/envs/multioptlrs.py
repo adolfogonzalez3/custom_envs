@@ -14,7 +14,7 @@ from custom_envs.envs import BaseEnvironment
 # https://github.com/rlpy/rlpy/blob/master/rlpy/Domains/Acrobot.py
 
 
-class OptLRs(BaseEnvironment):
+class MultiOptLRs(BaseEnvironment):
 
     """
     Summary:
@@ -35,6 +35,8 @@ class OptLRs(BaseEnvironment):
                        the target network's parameters.
     """
 
+    AGENT_FMT = 'parameter-{:d}'
+
     def __init__(self, data_set='mnist', batch_size=None, version=1):
         super().__init__()
         self.sequence = load_data(data_set, batch_size)
@@ -47,21 +49,23 @@ class OptLRs(BaseEnvironment):
                                    num_of_labels))
         self.wght_hist = np.zeros(self.grad_hist.shape)
         if version == 0:
-            state_size = self.model.size
+            state_size = 1
         elif version == 1:
-            state_size = self.model.size + 1
+            state_size = 2
         elif version == 2:
-            state_size = 2*self.model.size + 1
+            state_size = 2 + 1
         elif version == 3:
-            state_size = (self.model.size + 1)*past_history
-        #state_size = 2*self.model.size + 1
-        #state_size = self.loss_hist.size + self.grad_hist.size + self.wght_hist.size
-        self.observation_space = Box(low=-1e3, high=1e3, dtype=np.float32,
-                                     shape=(state_size,))
-        # self.action_space = Box(low=-1e3, high=1e3, dtype=np.float32,
-        #                        shape=(self.model.size,))
-        self.action_space = Box(low=0, high=1, dtype=np.float32,
-                                shape=(self.model.size,))
+            state_size = 2*past_history
+        self.observation_spaces = {MultiOptLRs.AGENT_FMT.format(i):
+                                   Box(low=-1e3, high=1e3,
+                                       dtype=np.float32,
+                                       shape=(state_size,))
+                                   for i in range(self.model.size)}
+        self.action_spaces = {MultiOptLRs.AGENT_FMT.format(i):
+                              Box(low=-1e3, high=1e3,
+                                  dtype=np.float32,
+                                  shape=(state_size,))
+                              for i in range(self.model.size)}
         self.seed()
         self.adjusted_loss_hist = np.zeros(self.loss_hist.shape)
         self.adjusted_grad_hist = np.zeros(self.grad_hist.shape)
@@ -69,7 +73,6 @@ class OptLRs(BaseEnvironment):
         self.version = version
 
     def base_reset(self):
-        #shuffle(self.features, self.labels, np_random=self.np_random)
         self.loss_hist.fill(0)
         self.grad_hist.fill(0)
         self.wght_hist.fill(0)
@@ -78,28 +81,40 @@ class OptLRs(BaseEnvironment):
         self.adjusted_wght_hist.fill(0)
         self.model.reset(npr)
         self.sequence.shuffle()
-        self.sequence.features = np.roll(self.sequence.features, 1, axis=1)
+        #self.sequence.features = np.roll(self.sequence.features, 1, axis=1)
         if self.version == 0:
-            return self.grad_hist[0].ravel()
+            grad_flat = self.grad_hist[0].ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): gd
+                      for i, gd in enumerate(grad_flat)}
         elif self.version == 1:
-            return np.concatenate([self.loss_hist[0].ravel(),
-                                   self.grad_hist[0].ravel()])
+            loss_flat = self.loss_hist[0].ravel()
+            grad_flat = self.grad_hist[0].ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): (lss, gd)
+                      for i, (lss, gd) in enumerate(zip(loss_flat, grad_flat))}
         elif self.version == 2:
-            return np.concatenate([self.wght_hist[0].ravel(),
-                                   self.loss_hist[0].ravel(),
-                                   self.grad_hist[0].ravel()])
+            wght_flat = self.wght_hist[0].ravel()
+            loss_flat = self.loss_hist[0].ravel()
+            grad_flat = self.grad_hist[0].ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): (wght, lss, gd)
+                      for i, (wght, lss, gd) in
+                      enumerate(zip(wght_flat, loss_flat, grad_flat))}
         elif self.version == 3:
-            return np.concatenate([self.adjusted_loss_hist.ravel(),
-                                   self.adjusted_grad_hist.ravel()])
+            loss_flat = self.adjusted_loss_hist.ravel()
+            grad_flat = self.adjusted_grad_hist.ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): (lss, gd)
+                      for i, (lss, gd) in enumerate(zip(loss_flat, grad_flat))}
+        return states
 
-    def base_step(self, a):
+    def base_step(self, actions):
+        shape = (-1, self.wght_hist.shape[-1])
+        action = np.reshape([actions['parameter-{:d}'.format(i)]
+                             for i in range(self.model.size)], shape)
         idx = self.current_step % len(self.loss_hist)
 
         seq_idx = self.current_step % len(self.sequence)
         features, labels = self.sequence[seq_idx]
         loss, grad, accu = self.model.compute_backprop(features, labels)
-        self.model.set_weights(self.model.weights -
-                               grad*a.reshape((-1, self.wght_hist.shape[-1])))
+        self.model.set_weights(self.model.weights - grad*action)
         loss, grad, accu = self.model.compute_backprop(features, labels)
 
         grad = grad / len(features)
@@ -131,27 +146,41 @@ class OptLRs(BaseEnvironment):
         self.adjusted_wght_hist[idx] = adjusted_wght
 
         if self.version == 0:
-            state = adjusted_grad.ravel()
+            grad_flat = adjusted_grad.ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): gd
+                      for i, gd in enumerate(grad_flat)}
         elif self.version == 1:
-            state = np.concatenate([adjusted_loss.ravel(),
-                                    adjusted_grad.ravel()])
+            loss_flat = adjusted_loss.ravel()
+            grad_flat = adjusted_grad.ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): (lss, gd)
+                      for i, (lss, gd) in enumerate(zip(loss_flat, grad_flat))}
         elif self.version == 2:
-            state = np.concatenate([adjusted_wght.ravel(),
-                                    adjusted_loss.ravel(),
-                                    adjusted_grad.ravel()])
+            wght_flat = adjusted_wght.ravel()
+            loss_flat = adjusted_loss.ravel()
+            grad_flat = adjusted_grad.ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): (wght, lss, gd)
+                      for i, (wght, lss, gd) in
+                      enumerate(zip(wght_flat, loss_flat, grad_flat))}
         elif self.version == 3:
-            state = np.concatenate([self.adjusted_loss_hist.ravel(),
-                                    self.adjusted_grad_hist.ravel()])
-            #state = np.zeros_like(state)
+            loss_flat = self.adjusted_loss_hist.ravel()
+            grad_flat = self.adjusted_grad_hist.ravel()
+            states = {MultiOptLRs.AGENT_FMT.format(i): (lss, gd)
+                      for i, (lss, gd) in enumerate(zip(loss_flat, grad_flat))}
         reward = -float(adjusted_loss)
+        rewards = {MultiOptLRs.AGENT_FMT.format(i): reward
+                   for i in range(self.model.size)}
         terminal = self._terminal()
+        terminals = {MultiOptLRs.AGENT_FMT.format(i): terminal
+                     for i in range(self.model.size)}
         if terminal:
             features = self.sequence.features
             labels = self.sequence.labels
             loss, _, accu = self.model.compute_backprop(features, labels)
         info = {'objective': loss, 'accuracy': accu}
-        # print(reward)
-        return state, reward, terminal, info
+        infos = {MultiOptLRs.AGENT_FMT.format(i): info
+                 for i in range(self.model.size)}
+
+        return states, rewards, terminals, infos
 
     def _terminal(self):
         return self.current_step >= 400
