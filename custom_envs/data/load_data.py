@@ -24,6 +24,23 @@ def load_mnist(name='fashion', kind='train'):
 
     return images, labels
 
+def load_emnist(name='emnist', kind='train'):
+    import lzma
+
+    """Load EMNIST data from `path`"""
+    path = Path(__file__).resolve().parent
+    labels_path = path / name / 'digits' / ('emnist-digits-%s-labels-idx1-ubyte.xz' % kind)
+    images_path = path / name / 'digits' / ('emnist-digits-%s-images-idx3-ubyte.xz' % kind)
+
+    with lzma.open(labels_path, 'rb') as lbpath:
+        labels = np.frombuffer(lbpath.read(), dtype=np.uint8, offset=8)
+
+    with lzma.open(images_path, 'rb') as imgpath:
+        images = np.frombuffer(imgpath.read(), dtype=np.uint8,
+                               offset=16).reshape(len(labels), 784)
+
+    return images, labels
+
 def load_data(name='iris', batch_size=None, num_of_labels=None):
     '''
     Load a data set.
@@ -40,13 +57,13 @@ def load_data(name='iris', batch_size=None, num_of_labels=None):
     path = Path(__file__).resolve().parent
     if name == 'iris':
         data = np.load((path / name).with_suffix('.npz'))['data']
-        features = data[..., :-1]
+        features = normalize(data[..., :-1])
         labels, _ = to_onehot(data[..., -1], num_of_labels)
     elif name == 'mnist':
         features, labels = load_mnist('mnist')
         features = normalize(resize_all(features))
         labels, _ = to_onehot(labels, num_of_labels)
-    elif name == 'mnist_test':
+    elif name == 'mnist-test':
         features, labels = load_mnist('mnist', 't10k')
         features = normalize(resize_all(features))
         labels, _ = to_onehot(labels, num_of_labels)
@@ -54,9 +71,14 @@ def load_data(name='iris', batch_size=None, num_of_labels=None):
         data = np.loadtxt(path / 'skin.txt', delimiter='\t')
         features = np.zeros((data.shape[0], 4))
         features[:, :3] = normalize(data[..., :-1])
-        labels, _ = to_onehot(data[..., -1], num_of_labels)
+        labels, _ = to_onehot(data[..., -1], 3)
     elif name == 'fashion':
         features, labels = load_mnist()
+        features = normalize(resize_all(features))
+        labels, _ = to_onehot(labels, num_of_labels)
+        features = np.roll(features, 1, axis=1)
+    elif name == 'emnist-digits':
+        features, labels = load_emnist()
         features = normalize(resize_all(features))
         labels, _ = to_onehot(labels, num_of_labels)
     else:
