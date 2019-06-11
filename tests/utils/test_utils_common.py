@@ -132,11 +132,13 @@ def test_use_random_state(seed, samples):
 
 
 def test_ravel_zip():
+    '''Tests ravel_zip.'''
     arrays = [npr.rand(128, 2**i) for i in range(10)]
     for arrays_flat in utils.ravel_zip(*arrays):
         assert sum(a.size for a in arrays_flat) == (2**10 - 1)
 
 
 def test_enzip():
+    '''Tests enzip.'''
     for i, j, _ in utils.enzip(range(10), range(100)):
         assert i == j
