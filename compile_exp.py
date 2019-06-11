@@ -2,7 +2,6 @@
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
