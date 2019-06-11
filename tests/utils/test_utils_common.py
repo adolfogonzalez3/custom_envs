@@ -129,3 +129,14 @@ def test_use_random_state(seed, samples):
     random_state = npr.RandomState(seed)
     test = tuple(random_state.rand() for _ in range(samples))
     assert test_context == test
+
+
+def test_ravel_zip():
+    arrays = [npr.rand(128, 2**i) for i in range(10)]
+    for arrays_flat in utils.ravel_zip(*arrays):
+        assert sum(a.size for a in arrays_flat) == (2**10 - 1)
+
+
+def test_enzip():
+    for i, j, _ in utils.enzip(range(10), range(100)):
+        assert i == j
