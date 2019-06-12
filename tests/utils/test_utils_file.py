@@ -10,12 +10,20 @@ import pytest
 import custom_envs.utils.utils_file as utils_file
 
 
-def create_test_file(path):
+def create_test_file(path, version=0):
     '''Create a json file for testing.'''
-    path = Path(path, 'test.json')
-    data = {chr(97 + i): i for i in range(26)}
-    with path.open('wt') as test:
-        json.dump(data, test)
+    if version == 0:
+        path = Path(path, 'test.json')
+        data = {chr(97 + i): i for i in range(26)}
+        with path.open('wt') as test:
+            json.dump(data, test)
+    else:
+        path = Path(path, 'test_line.json')
+        with path.open('wt') as test:
+            data = [{chr(97 + i): i for i in range(26-j)}
+                    for j in range(1, 11)]
+            for i in range(10):
+                test.write('\n'.join(json.dumps(d) for d in data))
     return path
 
 
@@ -29,6 +37,12 @@ def test_load_json(save_path):
     '''Test load_json function.'''
     path = create_test_file(save_path)
     dictionary = utils_file.load_json(path)
+    for i, (name, value) in enumerate(dictionary.items()):
+        assert i == value
+        assert name == chr(97 + i)
+    path = create_test_file(save_path, version=1)
+    dictionary = utils_file.load_json(path, line_no=5)
+    assert len(dictionary) == 26 - 5
     for i, (name, value) in enumerate(dictionary.items()):
         assert i == value
         assert name == chr(97 + i)
