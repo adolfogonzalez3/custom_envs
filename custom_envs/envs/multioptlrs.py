@@ -7,7 +7,6 @@ from gym.spaces import Box
 
 from custom_envs import load_data
 from custom_envs.models import ModelNumpy as Model
-#from custom_envs.models import ModelKeras as Model
 from custom_envs.envs import BaseMultiEnvironment
 
 # SOURCE:

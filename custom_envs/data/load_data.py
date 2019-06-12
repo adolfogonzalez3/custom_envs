@@ -6,7 +6,8 @@ import numpy as np
 
 from custom_envs.data.sequence import InMemorySequence
 from custom_envs.utils.utils_image import resize_array_many
-from custom_envs.utils.utils_common import to_onehot, normalize
+from custom_envs.utils.utils_common import to_onehot
+from custom_envs.utils.utils_math import normalize
 
 
 def load_mnist(name='fashion', kind='train'):

@@ -90,51 +90,6 @@ def enzip(*iterables):
         yield (i,) + iter_tuple
 
 
-def cross_entropy(prob, ground_truth):
-    '''
-    Compute the cross entropy loss between predictions and ground truths.
-
-    :param prob: (numpy.array) An array of predictions of similar shape to
-                               ground_truth.
-    :param ground_truth: (numpy.array) An array of ground truths.
-    '''
-    prob_log = np.log(prob+1e-16)
-    return np.mean(np.sum(-prob_log*ground_truth, axis=1))
-
-
-def mse(prediction, ground_truth):
-    '''
-    Compute the mean squared error loss between predictions and ground truths.
-
-    :param prediction: (numpy.array) An array of predictions of similar shape
-                                     to ground_truth.
-    :param ground_truth: (numpy.array) An array of ground truths.
-    '''
-    return np.mean(np.sum((prediction - ground_truth)**2, axis=1)/2)
-
-
-def softmax(logits):
-    '''
-    Compute softmax on an array of values.
-
-    :param x: A two dimensional array of values where values on the same row
-              have softmax applied to them.
-    '''
-    p_exp = np.exp(logits - np.max(logits, axis=1)[:, None])
-    p_sum = np.sum(p_exp, axis=1)
-    return p_exp/p_sum[:, None]
-
-
-def sigmoid(logits):
-    '''
-    Compute sigmoid on an array of values.
-
-    :param x: A two dimensional array of values where values on the same row
-              have sigmoid applied to them.
-    '''
-    return numexpr.evaluate('1 / (1 + exp(-logits - 1e-8))')
-
-
 def to_onehot(array, num_of_labels=None):
     '''
     Convert a one dimensional array of catergorical values to a one hot array.
@@ -167,16 +122,6 @@ def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
                         chunk_size=10)
                 for i, env in enumerate(envs)]
     return envs
-
-
-def normalize(data):
-    '''
-    Normalize the data to be within 0. and 1.
-
-    :param data: The data to normalize.
-    '''
-    mini = np.min(data, axis=0)
-    return (data - mini) / (np.max(data, axis=0) - mini + 1e-8)
 
 
 @contextmanager

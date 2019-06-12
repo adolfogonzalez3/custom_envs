@@ -41,62 +41,6 @@ def test_batchify_zip(num_of_arrays, batch_size):
             assert np.all(array_batch == array[i*batch_size:batch_size*(i+1)])
 
 
-@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
-@pytest.mark.parametrize("shape", SHAPES)
-def test_cross_entropy(seed, shape):
-    '''Tests cross_entropy.'''
-    npr.seed(seed)
-    array = utils.softmax(npr.uniform(size=shape))
-    labels = npr.uniform(size=shape)
-    labels = labels / np.expand_dims(np.mean(labels, axis=1), axis=1)
-    cost = utils.cross_entropy(array, labels)
-    assert cost >= 0
-    assert isinstance(cost, float)
-
-
-@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
-@pytest.mark.parametrize("shape", SHAPES)
-def test_mse(seed, shape):
-    '''Tests mse.'''
-    npr.seed(seed)
-    array = npr.uniform(size=shape)
-    array = array - np.min(array) / np.ptp(array)
-    labels = npr.uniform(size=shape)
-    cost = utils.mse(array, labels)
-    assert cost >= 0
-    assert isinstance(cost, float)
-
-
-@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
-@pytest.mark.parametrize("magnitude", MAGNITUDE)
-@pytest.mark.parametrize("shape", SHAPES)
-def test_softmax(seed, magnitude, shape):
-    '''Tests softmax.'''
-    npr.seed(seed)
-    low = -10**magnitude
-    high = 10**magnitude
-    array = npr.uniform(low, high, size=shape)
-    array = utils.softmax(array)
-    summation = np.sum(array, axis=1)
-    assert np.all(array >= 0)
-    assert np.all(array <= 1)
-    assert np.all(np.isclose(summation, 1))
-
-
-@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
-@pytest.mark.parametrize("magnitude", MAGNITUDE)
-@pytest.mark.parametrize("shape", SHAPES)
-def test_sigmoid(seed, magnitude, shape):
-    '''Tests sigmoid.'''
-    npr.seed(seed)
-    low = -10**magnitude
-    high = 10**magnitude
-    array = npr.randint(low, high, size=shape)
-    array = utils.sigmoid(array)
-    assert np.all(array >= 0)
-    assert np.all(array <= 1)
-
-
 @pytest.mark.parametrize("size", range(10, 100, 10))
 @pytest.mark.parametrize("num_of_labels", range(2, 10))
 def test_to_onehot(size, num_of_labels):
@@ -106,17 +50,6 @@ def test_to_onehot(size, num_of_labels):
     assert num_onehot_labels == num_of_labels
     assert onehot.shape == (size, num_of_labels)
     assert len(np.unique(onehot, axis=0)) == num_of_labels
-
-
-@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
-@pytest.mark.parametrize("shape", SHAPES)
-def test_normalize_bound(seed, shape):
-    '''Test that normalize function normalizes within 0 and 1.'''
-    npr.seed(seed)
-    array = npr.randn(*shape)
-    array = utils.normalize(array)
-    assert np.all(array >= 0)
-    assert np.all(array <= 1)
 
 
 @pytest.mark.parametrize("seed", range(NUM_OF_SEED))

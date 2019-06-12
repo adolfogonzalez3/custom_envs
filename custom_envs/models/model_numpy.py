@@ -4,7 +4,7 @@ import numpy as np
 import numpy.random as npr
 
 from custom_envs.models.model import ModelBase
-from custom_envs.utils.utils_common import softmax, cross_entropy, to_onehot
+from custom_envs.utils.utils_math import softmax, cross_entropy
 
 class ModelNumpy(ModelBase):
     '''

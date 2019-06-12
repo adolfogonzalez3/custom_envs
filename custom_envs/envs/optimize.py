@@ -107,17 +107,3 @@ class Optimize(BaseEnvironment):
 
     def close(self):
         pass
-
-
-def __main():
-    from stable_baselines.ppo2 import PPO2
-    from stable_baselines.common.policies import MlpPolicy
-    from stable_baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-    from stable_baselines.common.vec_env import DummyVecEnv
-    env = DummyVecEnv([Optimize])
-    agent = PPO2(MlpPolicy, env, verbose=1)
-    agent.learn(total_timesteps=10**2)
-
-
-if __name__ == '__main__':
-    __main()

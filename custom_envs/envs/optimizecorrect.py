@@ -7,7 +7,6 @@ from gym.spaces import Box
 
 from custom_envs import load_data
 from custom_envs.models import ModelNumpy as Model
-#from custom_envs.models import ModelKeras as Model
 from custom_envs.envs import BaseEnvironment
 
 __author__ = "Adolfo Gonzalez III <adolfo.gonzalez02@utrgv.edu>"
@@ -57,13 +56,9 @@ class OptimizeCorrect(BaseEnvironment):
             state_size = 2*self.model.size + 1
         elif version == 3:
             state_size = (self.model.size + 1)*past_history
-        #state_size = 2*self.model.size + 1
-        #state_size = self.loss_hist.size + self.grad_hist.size + self.wght_hist.size
         self.observation_space = Box(low=-1e3, high=1e3, dtype=np.float32,
                                      shape=(state_size,))
-        #self.action_space = Box(low=-1e3, high=1e3, dtype=np.float32,
-        #                        shape=(self.model.size,))
-        self.action_space = Box(low=0, high=1, dtype=np.float32,
+        self.action_space = Box(low=-1e3, high=1e3, dtype=np.float32,
                                 shape=(self.model.size,))
         self.seed()
         self.adjusted_loss_hist = np.zeros(self.loss_hist.shape)
@@ -72,7 +67,6 @@ class OptimizeCorrect(BaseEnvironment):
         self.version = version
 
     def base_reset(self):
-        #shuffle(self.features, self.labels, np_random=self.np_random)
         self.loss_hist.fill(0)
         self.grad_hist.fill(0)
         self.wght_hist.fill(0)
@@ -116,7 +110,8 @@ class OptimizeCorrect(BaseEnvironment):
             mean_grad = np.mean(self.grad_hist)
             adjusted_grad = np.divide(grad, np.abs(mean_grad) + 1)
             prev_wght = np.abs(self.wght_hist[idx-1] - self.wght_hist[idx-2])
-            abs_wght = np.abs(self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
+            abs_wght = np.abs(
+                self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
             adjusted_wght = np.divide(prev_wght, abs_wght)
         else:
             adjusted_loss = np.divide(loss - self.loss_hist[idx-1],
@@ -124,13 +119,14 @@ class OptimizeCorrect(BaseEnvironment):
             adjusted_grad = np.divide(grad, np.abs(self.grad_hist[idx-1]) + 1)
             adjusted_grad = np.divide(grad, np.abs(self.grad_hist[idx-1]) + 1)
             prev_wght = np.abs(self.wght_hist[idx-1] - self.wght_hist[idx-2])
-            abs_wght = np.abs(self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
+            abs_wght = np.abs(
+                self.wght_hist[idx] - self.wght_hist[idx-1]) + 0.1
             adjusted_wght = np.divide(prev_wght, abs_wght)
 
         self.adjusted_loss_hist[idx] = adjusted_loss
         self.adjusted_grad_hist[idx] = adjusted_grad
         self.adjusted_wght_hist[idx] = adjusted_wght
-        
+
         if self.version == 0:
             state = adjusted_grad.ravel()
         elif self.version == 1:
@@ -151,7 +147,7 @@ class OptimizeCorrect(BaseEnvironment):
             labels = self.sequence.labels
             loss, _, accu = self.model.compute_backprop(features, labels)
         info = {'objective': loss, 'accuracy': accu}
-        #print(reward)
+        # print(reward)
         return state, reward*100, terminal, info
 
     def _terminal(self):
@@ -162,17 +158,3 @@ class OptimizeCorrect(BaseEnvironment):
 
     def close(self):
         pass
-
-
-def __main():
-    from stable_baselines.ppo2 import PPO2
-    from stable_baselines.common.policies import MlpPolicy
-    from stable_baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-    from stable_baselines.common.vec_env import DummyVecEnv
-    env = DummyVecEnv([Optimize])
-    agent = PPO2(MlpPolicy, env, verbose=1)
-    agent.learn(total_timesteps=10**2)
-
-
-if __name__ == '__main__':
-    __main()
