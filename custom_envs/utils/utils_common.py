@@ -60,54 +60,79 @@ def batchify_zip(*args, size=32):
     :param args: *[list or numpy.array] A variable number of arguments that
                                         are either lists or numpy arrays.
     :param size: (int) The size of each batch.
+    :yield: ([numpy.array]) A list of numpy arrays.
     '''
     for batch_slice in range_slice(len(args[0]), step=size):
         yield [arg[batch_slice] for arg in args]
 
 
-def cross_entropy(p, y):
+def ravel_zip(*args):
+    '''
+    Return an iterator that returns tuples of flatten arrays.
+
+    :param args: *[list or numpy.array] A variable number of arguments that
+                                        are numpy arrays.
+    :param size: (int) The size of each batch.
+    :yield: ([numpy.array]) A list of numpy arrays.
+    '''
+    for args_tuple in zip(*args):
+        yield [arg.ravel() for arg in args_tuple]
+
+
+def enzip(*iterables):
+    '''
+    Make an iterator that yields the index and the aggregates of the args.
+
+    :param iterables: *[iterable] A variable number of arguments
+                                             that are iterable.
+    '''
+    for i, iter_tuple in enumerate(zip(*iterables)):
+        yield (i,) + iter_tuple
+
+
+def cross_entropy(prob, ground_truth):
     '''
     Compute the cross entropy loss between predictions and ground truths.
 
-    :param p: (numpy.array) An array of predictions of similar shape to y.
-    :param y: (numpy.array) An array of ground truths.
+    :param prob: (numpy.array) An array of predictions of similar shape to
+                               ground_truth.
+    :param ground_truth: (numpy.array) An array of ground truths.
     '''
-    p_log = np.log(p+1e-16)
-    return np.mean(np.sum(-p_log*y, axis=1))
+    prob_log = np.log(prob+1e-16)
+    return np.mean(np.sum(-prob_log*ground_truth, axis=1))
 
 
-def mse(p, y):
+def mse(prediction, ground_truth):
     '''
     Compute the mean squared error loss between predictions and ground truths.
 
-    :param p: (numpy.array) An array of predictions of similar shape to y.
-    :param y: (numpy.array) An array of ground truths.
+    :param prediction: (numpy.array) An array of predictions of similar shape
+                                     to ground_truth.
+    :param ground_truth: (numpy.array) An array of ground truths.
     '''
-    return np.mean(np.sum((p - y)**2, axis=1)/2)
+    return np.mean(np.sum((prediction - ground_truth)**2, axis=1)/2)
 
 
-def softmax(x):
+def softmax(logits):
     '''
     Compute softmax on an array of values.
 
     :param x: A two dimensional array of values where values on the same row
               have softmax applied to them.
     '''
-    #x = (x - np.max(x))/(np.max(x) - np.min(x) + 1e-8)
-    p_exp = np.exp(x - np.max(x, axis=1)[:, None])
-    #p_exp = np.exp(x)
+    p_exp = np.exp(logits - np.max(logits, axis=1)[:, None])
     p_sum = np.sum(p_exp, axis=1)
     return p_exp/p_sum[:, None]
 
 
-def sigmoid(x):
+def sigmoid(logits):
     '''
     Compute sigmoid on an array of values.
 
     :param x: A two dimensional array of values where values on the same row
               have sigmoid applied to them.
     '''
-    return numexpr.evaluate('1 / (1 + exp(-x - 1e-8))')
+    return numexpr.evaluate('1 / (1 + exp(-logits - 1e-8))')
 
 
 def to_onehot(array, num_of_labels=None):

@@ -18,23 +18,28 @@ import custom_envs.utils.utils_plot as utils_plot
 from custom_envs.utils.utils_pandas import create_grid
 from eval_multiple_exp import run_experiment_multiagent
 
+
 def plot(axis_obj, sequence, **kwargs):
     axis_obj.plot(range(len(sequence)), sequence, **kwargs)
 
+
 def fill_between(axis_obj, mean, std, **kwargs):
     axis_obj.fill_between(range(len(mean)), mean + std, mean - std, **kwargs)
-        
+
 
 def add_legend(axis):
     chartBox = axis.get_position()
-    axis.set_position([chartBox.x0, chartBox.y0, chartBox.width*0.8, chartBox.height])
-    axis.legend(loc='upper center', bbox_to_anchor=(1.2, 0.8), shadow=True, ncol=1)
+    axis.set_position(
+        [chartBox.x0, chartBox.y0, chartBox.width*0.8, chartBox.height])
+    axis.legend(loc='upper center', bbox_to_anchor=(
+        1.2, 0.8), shadow=True, ncol=1)
 
 
 def max_group(dataframe, by, column, method='mean'):
     groups = dataframe.groupby(by)
     if method == 'mean':
         return groups.mean()[column].idxmax()
+
 
 def min_group(dataframe, by, column, method='mean'):
     groups = dataframe.groupby(by)
@@ -75,7 +80,7 @@ def plot_two(dataframes, names):
         axis.set_ylabel('objective')
         axis.legend()
     plt.show()
-    
+
 
 def plot_hyperparamsearch_alg(dataframe):
     '''Plot experiments contained in dataframe.'''
@@ -186,8 +191,7 @@ def plot_hyperparamsearch_alg(dataframe):
     add_legend(ax2)
     add_legend(ax3)
     plt.show()
-    
-    
+
 
 def plot_hyperparamsearch_LR():
     df_lr = pd.read_csv('results_lr.csv', index_col=0)
@@ -204,6 +208,7 @@ def plot_hyperparamsearch_LR():
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.show()
+
 
 def plot_best(df, df_lr):
     learning_rates_lr = sorted(df_lr['learning_rate'].unique())
@@ -231,7 +236,7 @@ def plot_best(df, df_lr):
         if metric.min() < best_metric[alg]:
             best_metric[alg] = metric.min()
             best[alg] = metric
-    
+
     for metric, i in zip(best, algs):
         alg = None
         if i == 0:
@@ -247,6 +252,7 @@ def plot_best(df, df_lr):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.show()
+
 
 def plot_hyperparamsearch_alg2(dataframe):
     '''Plot experiments contained in dataframe.'''
@@ -290,6 +296,7 @@ def plot_hyperparamsearch_alg2(dataframe):
             utils_plot.fill_between(ax, metric_mean, metric_std, alpha=0.1)
     plt.show()
 
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -302,6 +309,7 @@ def main():
     print('Plotting...')
     plot_hyperparamsearch_alg2(dataframe)
 
+
 def main2():
     print('Reading...')
     #dataframe = pd.read_pickle('multiagent.pkl')
@@ -309,16 +317,19 @@ def main2():
     dataframe2 = pd.read_pickle('exploration_a2c.pkl')
     print('Plotting...')
     #df_lr = pd.read_csv('results_lr.csv', index_col=0)
-    #plot_hyperparamsearch_LR()
+    # plot_hyperparamsearch_LR()
     plot_two([dataframe, dataframe2], ['single_agent',
                                        'single_agent_with_lower_exploration'])
 
+
 def main3():
-    dataframe = pd.read_csv('linreg_results_lr_0.061585.csv').groupby('index').mean()
+    dataframe = pd.read_csv(
+        'linreg_results_lr_0.061585.csv').groupby('index').mean()
     print(dataframe)
     print(dataframe['loss'])
     print(dataframe['acc'])
     print(dataframe['acc'].max())
+
 
 if __name__ == '__main__':
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'

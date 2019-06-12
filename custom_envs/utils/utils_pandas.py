@@ -38,14 +38,14 @@ def create_grid(dataframe, levels=3):
     :param levels: (int) The number of levels to index by.
     """
     indexes_groups = list(iterate_levels(dataframe, levels))
-    indexes, groups = zip(*indexes_groups)
+    indexes, _ = zip(*indexes_groups)
     indexes = zip(*indexes)
     grid_shape = [len(l) for l in dataframe.index.levels[:levels]]
     grids = [np.reshape(index, grid_shape) for index in indexes]
-    return grids, groups
+    return grids
 
 
-def apply_method(dataframe, method):
+def apply_method(dataframe, method='mean'):
     """
     Apply method to dataframe.
 
@@ -63,13 +63,13 @@ def max_group(dataframe, groupby, column, method='mean'):
     Get the group with max value after applying a method.
 
     :param dataframe: (pandas.DataFrame) The dataframe to use.
-    :param by: ([str]) A list of columns to group by.
+    :param groupby: ([str]) A list of columns to group by.
     :param column: (str) The column to target.
     :param method: (str) The method to apply to the dataframe.
     """
     groups = dataframe.groupby(groupby)
     group_applied = apply_method(groups, method)
-    return group_applied[column].idmax()
+    return group_applied[column].idxmax()
 
 
 def min_group(dataframe, groupby, column, method='mean'):
@@ -77,7 +77,7 @@ def min_group(dataframe, groupby, column, method='mean'):
     Get the group with min value after applying a method.
 
     :param dataframe: (pandas.DataFrame) The dataframe to use.
-    :param by: ([str]) A list of columns to group by.
+    :param groupby: ([str]) A list of columns to group by.
     :param column: (str) The column to target.
     :param method: (str) The method to apply to the dataframe.
     """
