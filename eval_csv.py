@@ -1,4 +1,4 @@
-
+'''Module for plotting results from experiments.'''
 import os
 import pathlib
 from itertools import product
@@ -15,8 +15,8 @@ from matplotlib import cm
 
 #import custom_envs.utils.utils_pandas as utils_pandas
 import custom_envs.utils.utils_plot as utils_plot
-from custom_envs.utils.utils_pandas import create_grid
-from eval_multiple_exp import run_experiment_multiagent
+import custom_envs.utils.utils_pandas as utils_pandas
+#from eval_multiple_exp import run_experiment_multiagent
 
 
 def plot(axis_obj, sequence, **kwargs):
@@ -256,37 +256,35 @@ def plot_best(df, df_lr):
 
 def plot_hyperparamsearch_alg2(dataframe):
     '''Plot experiments contained in dataframe.'''
-    current_path = pathlib.Path(__file__).resolve().parent
-    current_path = current_path / 'results_mnist'
 
     dataframe['learning_rate'] = np.log10(dataframe['learning_rate'])
     groups = dataframe.groupby(['learning_rate', 'gamma', 'alg', 'index'])
     mean_df = groups.mean()
     std_df = groups.std()
-    (lrs, gammas, algs), groups = create_grid(mean_df)
-    Z = np.array([g['objective'].mean() for g in groups]).reshape(lrs.shape)
-    metric_min = np.nanmin(Z)
-    metric_max = np.nanmax(Z)
+    (lrates, gammas, algs) = utils_pandas.create_grid(mean_df, 3)
+    target = np.reshape([g['objective'].mean()
+                         for _, g in utils_pandas.iterate_levels(mean_df, 3)],
+                        lrates.shape)
+    metric_min = np.nanmin(target)
+    metric_max = np.nanmax(target)
 
     for i, alg in enumerate(algs[0, 0, :]):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.plot_surface(lrs[..., i], gammas[..., i], Z[..., i], cmap=None,
-                        linewidth=0, antialiased=False)
+        ax.plot_surface(lrates[..., i], gammas[..., i], target[..., i],
+                        cmap=None, linewidth=0, antialiased=False)
         attr = {'xlabel': 'Learning Rate', 'ylabel': 'Gamma',
                 'zlabel': 'Mean Loss', 'zmin': metric_min, 'zmax': metric_max,
                 'title': 'Model: {}'.format(alg)}
         utils_plot.set_attributes(ax, attr)
-        pos = np.nanargmin(Z[..., i])
-        lr = lrs[..., i].ravel()[pos]
-        g = gammas[..., i].ravel()[pos]
-        print(alg, 10**lr, g)
-        #metric_mean = mean_df.loc[(lr, g, alg), 'objective']
-        #metric_std = std_df.loc[(lr, g, alg), 'objective']
+        pos = np.nanargmin(target[..., i])
+        lrate = lrates[..., i].ravel()[pos]
+        gamma = gammas[..., i].ravel()[pos]
+        print(alg, 10**lrate, gamma)
         for col in ['objective', 'accuracy']:
             ylabel = 'loss' if col == 'objective' else col
-            metric_mean = mean_df.loc[(lr, g, alg), col]
-            metric_std = std_df.loc[(lr, g, alg), col]
+            metric_mean = mean_df.loc[(lrate, gamma, alg), col]
+            metric_std = std_df.loc[(lrate, gamma, alg), col]
             fig = plt.figure()
             ax = fig.add_subplot(111)
             attr = {'xlabel': 'steps', 'ylabel': ylabel,
