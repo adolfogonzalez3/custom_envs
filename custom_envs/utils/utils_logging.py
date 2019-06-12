@@ -128,6 +128,7 @@ class Monitor(Wrapper):
         """
         if self.data:
             self.save()
+        super().close()
 
     def get_total_steps(self):
         """

@@ -25,34 +25,33 @@ def _worker(remote, env_fn_wrapper):
     env = env_fn_wrapper.var()
     try:
         while True:
-            try:
-                cmd, data = remote.recv()
-                if cmd == 'step':
-                    observation, reward, done, info = env.step(data)
-                    if done:
-                        observation = env.reset()
-                    remote.send((observation, reward, done, info))
-                elif cmd == 'reset':
+            cmd, data = remote.recv()
+            if cmd == 'step':
+                observation, reward, done, info = env.step(data)
+                if done:
                     observation = env.reset()
-                    remote.send(observation)
-                elif cmd == 'render':
-                    remote.send(env.render(*data[0], **data[1]))
-                elif cmd == 'close':
-                    remote.close()
-                    break
-                elif cmd == 'get_spaces':
-                    remote.send((env.observation_space, env.action_space))
-                elif cmd == 'env_method':
-                    method = getattr(env, data[0])
-                    remote.send(method(*data[1], **data[2]))
-                elif cmd == 'get_attr':
-                    remote.send(getattr(env, data))
-                elif cmd == 'set_attr':
-                    remote.send(setattr(env, data[0], data[1]))
-                else:
-                    raise NotImplementedError
-            except EOFError:
+                remote.send((observation, reward, done, info))
+            elif cmd == 'reset':
+                observation = env.reset()
+                remote.send(observation)
+            elif cmd == 'render':
+                remote.send(env.render(*data[0], **data[1]))
+            elif cmd == 'close':
+                remote.close()
                 break
+            elif cmd == 'get_spaces':
+                remote.send((env.observation_space, env.action_space))
+            elif cmd == 'env_method':
+                method = getattr(env, data[0])
+                remote.send(method(*data[1], **data[2]))
+            elif cmd == 'get_attr':
+                remote.send(getattr(env, data))
+            elif cmd == 'set_attr':
+                remote.send(setattr(env, data[0], data[1]))
+            else:
+                raise NotImplementedError
+    except EOFError:
+        pass
     finally:
         env.close()
 
