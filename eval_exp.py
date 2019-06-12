@@ -79,7 +79,7 @@ def task(path, seed, batch_size=None):
             epoch_no += 1
     return infos
 
-def task_lr(seed):
+def task_lr(seed, batch_size=None):
     import tensorflow as tf
     import tensorflow.keras as keras
 
@@ -87,6 +87,7 @@ def task_lr(seed):
     sequence = load_data('mnist')
     features = sequence.features
     labels = sequence.labels
+    batch_size = len(features) if batch_size is None else batch_size
 
     model = tf.keras.Sequential()
     model.add(tf.keras.layers.Dense(labels.shape[-1],
@@ -95,20 +96,23 @@ def task_lr(seed):
     model.compile(tf.train.GradientDescentOptimizer(0.1),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
-    hist = model.fit(features, labels, epochs=40, verbose=0).history
+    hist = model.fit(features, labels, epochs=40, verbose=0,
+                     batch_size=batch_size).history
     info = [{'epoch': epoch, 'loss': lss, 'accuracy': acc, 'seed': seed}
             for epoch, lss, acc in enzip(hist['loss'], hist['acc'])]
     return info
 
-def run_multi(trials=10):
+def run_multi(trials=10, batch_size=None):
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="The directory to save files to.")
     args = parser.parse_args()
     path = Path(args.path)
-    infos = list(chain.from_iterable([task(path, i) for i in trange(trials)]))
+    infos = list(chain.from_iterable([task(path, i, batch_size)
+                                      for i in trange(trials)]))
     dataframe_rl = pd.DataFrame(infos)
-    infos = list(chain.from_iterable([task_lr(i) for i in trange(trials)]))
+    infos = list(chain.from_iterable([task_lr(i, batch_size)
+                                      for i in trange(trials)]))
     dataframe_lc = pd.DataFrame(infos)
     mean_rl = dataframe_rl.groupby('epoch').mean()
     std_rl = dataframe_rl.groupby('epoch').std()
@@ -142,4 +146,4 @@ def run_multi(trials=10):
     plt.show()
 
 if __name__ == '__main__':
-    run_multi(10)
+    run_multi(10, batch_size=2048)

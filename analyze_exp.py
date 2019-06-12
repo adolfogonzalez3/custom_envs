@@ -1,4 +1,4 @@
-
+'''Module for analyzing results from experiments.'''
 import os
 from glob import glob
 from collections import defaultdict
