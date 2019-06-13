@@ -2,6 +2,7 @@
 Module for creating files that are contain hyperparameters for experiments.
 '''
 import sqlite3
+import argparse
 from pathlib import Path
 from itertools import product
 
@@ -25,8 +26,7 @@ def populate_table(hyperparams):
 
 
 def main():
-    import argparse
-
+    '''Create a file containing experiment details.'''
     parser = argparse.ArgumentParser()
     parser.add_argument('file_name')
     parser.add_argument('--type', choices=['json', 'csv', 'sqlite3'],

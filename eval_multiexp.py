@@ -1,4 +1,5 @@
 '''Module for evaluating learned agents against different environments.'''
+import math
 import argparse
 from threading import Thread
 from pathlib import Path
@@ -8,7 +9,7 @@ from itertools import chain
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
-from tqdm import trange
+from tqdm import trange, tqdm
 from stable_baselines import PPO2, A2C, DDPG
 
 import custom_envs.utils.utils_plot as utils_plot
@@ -26,7 +27,7 @@ def run_handle(env):
         data = env.handle_requests()
 
 
-def task(path, seed, batch_size=None):
+def task(path, seed, batch_size=None, total_epochs=40):
     '''Run the agent on a data set.'''
     alg, *_ = path.name.split('-')
     save_path = path / 'model.pkl'
@@ -50,30 +51,26 @@ def task(path, seed, batch_size=None):
     taskrun.start()
     states = dummy_env.reset()
     info_list = []
-    epoch_no = 0
-    current_sample_no = 0
-    while epoch_no < 40:
-        action, *_ = model.predict(states)
-        states, rewards, _, infos = dummy_env.step(action)
-        info = infos[0]
-        info['step'] = len(info_list)
-        info['reward'] = sum(rewards)
-        info['seed'] = seed
-        info['epoch'] = epoch_no
-        info_list.append(info)
-        if batch_size is not None:
-            current_sample_no += batch_size
-            if current_sample_no >= num_of_samples:
-                epoch_no += 1
-                current_sample_no = 0
-        else:
-            epoch_no += 1
+    if batch_size is not None:
+        steps_per_epoch = math.ceil(num_of_samples / batch_size)
+    else:
+        steps_per_epoch = 1
+    for epoch_no in trange(total_epochs):
+        for step in trange(steps_per_epoch):
+            action, *_ = model.predict(states)
+            states, rewards, _, infos = dummy_env.step(action)
+            info = infos[0]
+            info['step'] = epoch_no*steps_per_epoch + step
+            info['reward'] = sum(rewards)
+            info['seed'] = seed
+            info['epoch'] = epoch_no
+            info_list.append(info)
     dummy_env.close()
     taskrun.join()
     return info_list
 
 
-def task_lr(seed, batch_size=None):
+def task_lr(seed, batch_size=None, total_epochs=40):
     '''Train a logistic classification model.'''
     sequence = load_data('mnist')
     features = sequence.features
@@ -86,22 +83,24 @@ def task_lr(seed, batch_size=None):
     model.compile(tf.train.GradientDescentOptimizer(0.1),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
-    hist = model.fit(features, labels, epochs=40, verbose=0,
+    hist = model.fit(features, labels, epochs=total_epochs, verbose=0,
                      batch_size=batch_size).history
     return [{'epoch': epoch, 'loss': lss, 'accuracy': acc, 'seed': seed}
             for epoch, lss, acc in enzip(hist['loss'], hist['acc'])]
 
 
-def run_multi(trials=10, batch_size=None):
+def run_multi(trials=10, batch_size=None, total_epochs=40):
     '''Run both agent evaluationg and logistic classification training.'''
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="The directory to save files to.")
     args = parser.parse_args()
     path = Path(args.path)
-    infos = list(chain.from_iterable([task(path, i, batch_size=batch_size)
+    infos = list(chain.from_iterable([task(path, i, batch_size=batch_size,
+                                           total_epochs=total_epochs)
                                       for i in trange(trials)]))
     dataframe_rl = pd.DataFrame(infos)
-    infos = list(chain.from_iterable([task_lr(i, batch_size=batch_size)
+    infos = list(chain.from_iterable([task_lr(i, batch_size=batch_size,
+                                              total_epochs=total_epochs)
                                       for i in trange(trials)]))
     dataframe_lc = pd.DataFrame(infos)
     mean_rl = dataframe_rl.groupby('epoch').mean()
@@ -141,4 +140,5 @@ def run_multi(trials=10, batch_size=None):
 
 
 if __name__ == '__main__':
-    run_multi(1, batch_size=None)
+    tf.logging.set_verbosity(tf.logging.ERROR)
+    run_multi(1, batch_size=8192, total_epochs=40)
