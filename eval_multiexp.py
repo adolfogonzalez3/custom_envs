@@ -10,7 +10,7 @@ from collections import defaultdict
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
-from tqdm import trange, tqdm
+from tqdm import trange
 from stable_baselines import PPO2, A2C, DDPG
 
 import custom_envs.utils.utils_plot as utils_plot
