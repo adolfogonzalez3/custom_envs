@@ -5,6 +5,7 @@ from threading import Thread
 from pathlib import Path
 from functools import partial
 from itertools import chain
+from collections import defaultdict
 
 import tensorflow as tf
 import pandas as pd
@@ -15,6 +16,7 @@ from stable_baselines import PPO2, A2C, DDPG
 import custom_envs.utils.utils_plot as utils_plot
 from custom_envs.multiagent import MultiEnvServer
 from custom_envs.utils.utils_venv import ThreadVecEnv
+from custom_envs.envs.multioptimize import MultiOptimize
 from custom_envs.envs.multioptlrs import MultiOptLRs
 from custom_envs.utils.utils_common import enzip
 from custom_envs.data import load_data
@@ -27,12 +29,13 @@ def run_handle(env):
         data = env.handle_requests()
 
 
-def task(path, seed, batch_size=None, total_epochs=40):
+def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
     '''Run the agent on a data set.'''
     alg, *_ = path.name.split('-')
     save_path = path / 'model.pkl'
-    env = MultiOptLRs(data_set='mnist', batch_size=batch_size)
-    sequence = load_data('mnist')
+    #env = MultiOptLRs(data_set=data_set, batch_size=batch_size)
+    env = MultiOptimize(data_set=data_set, batch_size=batch_size)
+    sequence = load_data(data_set)
     num_of_samples = len(sequence.features)
     main_environment = MultiEnvServer(env)
 
@@ -70,9 +73,9 @@ def task(path, seed, batch_size=None, total_epochs=40):
     return info_list
 
 
-def task_lr(seed, batch_size=None, total_epochs=40):
+def task_lr(seed, batch_size=None, total_epochs=40, data_set='mnist'):
     '''Train a logistic classification model.'''
-    sequence = load_data('mnist')
+    sequence = load_data(data_set)
     features = sequence.features
     labels = sequence.labels
     batch_size = len(features) if batch_size is None else batch_size
@@ -80,7 +83,7 @@ def task_lr(seed, batch_size=None, total_epochs=40):
     model.add(tf.keras.layers.Dense(labels.shape[-1],
                                     input_shape=features.shape[1:],
                                     activation='softmax'))
-    model.compile(tf.train.GradientDescentOptimizer(0.1),
+    model.compile(tf.train.GradientDescentOptimizer(1e-1),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     hist = model.fit(features, labels, epochs=total_epochs, verbose=0,
@@ -89,56 +92,67 @@ def task_lr(seed, batch_size=None, total_epochs=40):
             for epoch, lss, acc in enzip(hist['loss'], hist['acc'])]
 
 
-def run_multi(trials=10, batch_size=None, total_epochs=40):
+def plot_results(axes, dataframe, groupby, targets, label=None):
+    grouped = dataframe.groupby('epoch')
+    mean_df = grouped.mean()
+    std_df = grouped.std()
+    for axis, target in zip(axes, targets):
+        utils_plot.plot_sequence(axis, mean_df[target], label=label)
+        utils_plot.fill_between(axis, mean_df[target], std_df[target],
+                                alpha=0.1, label=label)
+
+
+def run_multi(path, trials=10, batch_size=None, total_epochs=40,
+              data_set='mnist'):
     '''Run both agent evaluationg and logistic classification training.'''
-    parser = argparse.ArgumentParser()
-    parser.add_argument("path", help="The directory to save files to.")
-    args = parser.parse_args()
     path = Path(args.path)
-    infos = list(chain.from_iterable([task(path, i, batch_size=batch_size,
-                                           total_epochs=total_epochs)
-                                      for i in trange(trials)]))
-    dataframe_rl = pd.DataFrame(infos)
+    if True:
+        infos = list(chain.from_iterable([task(path, i, batch_size=batch_size,
+                                               total_epochs=total_epochs,
+                                               data_set=data_set)
+                                          for i in trange(trials)]))
+        dataframe_rl = pd.DataFrame(infos)
     infos = list(chain.from_iterable([task_lr(i, batch_size=batch_size,
-                                              total_epochs=total_epochs)
+                                              total_epochs=total_epochs,
+                                              data_set=data_set)
                                       for i in trange(trials)]))
     dataframe_lc = pd.DataFrame(infos)
-    mean_rl = dataframe_rl.groupby('epoch').mean()
-    std_rl = dataframe_rl.groupby('epoch').std()
-    mean_lc = dataframe_lc.groupby('epoch').mean()
-    std_lc = dataframe_lc.groupby('epoch').std()
-    fig = plt.figure()
-    axis = fig.add_subplot(111)
+    axes = defaultdict(lambda: plt.figure().add_subplot(111))
     pyplot_attr = {
-        'title': 'Performance on MNIST data set',
+        'title': 'Performance on {} data set'.format(data_set.upper()),
         'ylabel': 'Loss',
         'xlabel': 'Epoch',
     }
-    utils_plot.set_attributes(axis, pyplot_attr)
-    utils_plot.plot_sequence(axis, mean_rl['objective'], label='RL')
-    utils_plot.fill_between(axis, mean_rl['objective'], std_rl['objective'],
-                            alpha=0.1, label='RL')
-    utils_plot.plot_sequence(axis, mean_lc['loss'],
-                             label='Logistic Classification')
-    utils_plot.fill_between(axis, mean_lc['loss'], std_lc['loss'], alpha=0.1,
-                            label='Logistic Classification')
-    utils_plot.add_legend(axis)
-
-    fig = plt.figure()
-    axis = fig.add_subplot(111)
+    utils_plot.set_attributes(axes['loss'], pyplot_attr)
     pyplot_attr['ylabel'] = 'Accuracy'
-    utils_plot.set_attributes(axis, pyplot_attr)
-    utils_plot.plot_sequence(axis, mean_rl['accuracy'], label='RL')
-    utils_plot.fill_between(axis, mean_rl['accuracy'], std_rl['accuracy'],
-                            alpha=0.1, label='RL')
-    utils_plot.plot_sequence(axis, mean_lc['accuracy'],
-                             label='Logistic Classification')
-    utils_plot.fill_between(axis, mean_lc['accuracy'], std_lc['accuracy'],
-                            alpha=0.1, label='Logistic Classification')
-    utils_plot.add_legend(axis)
+    utils_plot.set_attributes(axes['accuracy'], pyplot_attr)
+    plot_results(axes.values(), dataframe_rl, 'epoch',
+                 ['objective', 'accuracy'], 'RL')
+    plot_results(axes.values(), dataframe_lc, 'epoch', ['loss', 'accuracy'],
+                 'Logistic Classification')
+    utils_plot.add_legend(axes['loss'])
+    utils_plot.add_legend(axes['accuracy'])
     plt.show()
 
 
-if __name__ == '__main__':
+def main():
+    '''Evaluate a trained model against logistic regression.'''
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model_weights", help="The path to the model weights.",
+                        type=Path)
+    parser.add_argument("--trials", help="The number of trials.",
+                        type=int, default=1)
+    parser.add_argument("--batch_size", help="The batch size.",
+                        type=int, default=32)
+    parser.add_argument("--total_epochs", help="The number of epochs.",
+                        type=int, default=40)
+    parser.add_argument("--data_set", help="The data set to trial against.",
+                        type=str, default='iris')
+    args = parser.parse_args()
     tf.logging.set_verbosity(tf.logging.ERROR)
-    run_multi(1, batch_size=8192, total_epochs=40)
+    run_multi(args.model_weights, args.trails, args.batch_size,
+              args.total_epochs, args.data_set)
+
+
+if __name__ == '__main__':
+    main()
