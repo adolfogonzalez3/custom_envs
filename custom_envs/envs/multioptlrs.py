@@ -61,7 +61,7 @@ class MultiOptLRs(BaseMultiEnvironment):
                                        shape=(state_size,))
                                    for i in range(self.model.size)}
         self.action_spaces = {MultiOptLRs.AGENT_FMT.format(i):
-                              Box(low=-1e3, high=1e3,
+                              Box(low=0., high=1.,
                                   dtype=np.float32,
                                   shape=(1,))
                               for i in range(self.model.size)}
