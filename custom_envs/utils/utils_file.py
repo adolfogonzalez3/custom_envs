@@ -44,8 +44,8 @@ def get_commit_hash(path=None):
     :return: (str) The git commit hash.
     '''
     path = Path() if path is None else Path(path)
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            cwd=path).stdout
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=path,
+                            stdout=subprocess.PIPE).stdout
     if not commit:
         raise RuntimeError("Path doesn't point to a repository.")
     return commit.rstrip().decode()
