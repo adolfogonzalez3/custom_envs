@@ -20,6 +20,7 @@ from custom_envs.multiagent import MultiEnvServer
 from custom_envs.utils.utils_logging import Monitor
 from custom_envs.utils.utils_venv import ThreadVecEnv
 from custom_envs.envs.multioptlrs import MultiOptLRs
+from custom_envs.envs.multioptimize import MultiOptimize
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,8 +70,8 @@ def run_experiment(parameters):
         log_dir.mkdir(parents=True)
         parameters['commit'] = utils_file.get_commit_hash(repository_path)
         utils_file.save_json(parameters, log_dir / 'hyperparams.json')
-        env = MultiOptLRs(data_set='iris',
-                          batch_size=parameters.get('batch_size', 32))
+        env = MultiOptimize(data_set='mnist',
+                            batch_size=parameters.get('batch_size', 32))
         env.seed(parameters.get('seed'))
         parameters['model_path'] = str(log_dir / 'model.pkl')
         log_path = str(log_dir / 'monitor_{:d}')
@@ -114,7 +115,7 @@ def loop_over_json_file():
     args = parser.parse_args()
     dataframe = pd.read_json(args.file_path, orient='records', lines=True)
     parameters_list = dataframe.to_dict(orient='records')
-    for parameters in parameters_list[:1]:
+    for parameters in parameters_list:
         print(parameters)
         run_experiment(parameters)
 
@@ -143,5 +144,5 @@ def single_task_json():
 if __name__ == '__main__':
     # single_task_csv()
     # single_task_json()
-    # loop_over_json_file()
-    main()
+    loop_over_json_file()
+    #main()
