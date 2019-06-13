@@ -49,8 +49,10 @@ def main():
 
     dataframe = populate_table(hyperparams)
     dataframe = dataframe.reindex(columns=columns)
-    dataframe['env_name'] = 'Optimize-v0'
-    dataframe['path'] = 'results_mnist'
+    dataframe['total_timesteps'] = 10**7
+    dataframe['env_name'] = 'MultiOptimize-v0'
+    dataframe['path'] = 'results_mnist_multioptimize'
+    dataframe['batch_size'] = 32
 
     if args.type == 'json':
         dataframe.to_json(file_name, orient='records', lines=True)
