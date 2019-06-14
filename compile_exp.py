@@ -24,7 +24,7 @@ def load_exprs(path):
     path = Path(path)
     expr_paths = [ename for ename in path.iterdir() if ename.is_dir()]
     with ProcessPoolExecutor() as executor:
-        expr_dfs = list(tqdm(executor.map(load_expr, expr_paths, chunksize=32),
+        expr_dfs = list(tqdm(executor.map(load_expr, expr_paths),
                              total=len(expr_paths)))
     return pd.concat(expr_dfs)
 
