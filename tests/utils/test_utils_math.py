@@ -5,11 +5,23 @@ import numpy.random as npr
 
 import custom_envs.utils.utils_math as utils
 
-BATCH_SIZES = tuple(2**np.arange(5))
-MAGNITUDE = tuple(range(5))
-NUM_OF_SEED = 5
-NUM_OF_ARRAYS = 5
-SHAPES = tuple((2**i, i + 2) for i in range(5))
+BATCH_SIZES = tuple(2**np.arange(3))
+MAGNITUDE = tuple(range(3))
+NUM_OF_SEED = 3
+NUM_OF_ARRAYS = 3
+SHAPES = tuple((2**i, i + 2) for i in range(3))
+
+
+@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
+@pytest.mark.parametrize("samples", range(10, 100, 10))
+def test_use_random_state(seed, samples):
+    '''Tests context manager use_random_state.'''
+    random_state = npr.RandomState(seed)
+    with utils.use_random_state(random_state):
+        test_context = tuple(npr.rand() for _ in range(samples))
+    random_state = npr.RandomState(seed)
+    test = tuple(random_state.rand() for _ in range(samples))
+    assert test_context == test
 
 
 @pytest.mark.parametrize("seed", range(NUM_OF_SEED))

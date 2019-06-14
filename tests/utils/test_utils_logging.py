@@ -15,8 +15,10 @@ TERMINAL_STEPS = 10
 STEPS = npr.randint(TERMINAL_STEPS, 100, size=1)
 ACTION_SIZE = 10
 
-class fake_env(gym.Env):
+
+class StubEnv(gym.Env):
     '''Environment for testing.'''
+
     def __init__(self):
         self.counter = 0
         self.action_space = gym.spaces.Discrete(5)
@@ -24,25 +26,36 @@ class fake_env(gym.Env):
                                                 shape=(ACTION_SIZE,))
 
     def step(self, action):
+        '''Stub.'''
         self.counter += 1
         return ([self.counter]*ACTION_SIZE, self.counter, self.terminal(),
                 {'half': self.counter // 2})
 
     def terminal(self):
+        '''Stub.'''
         return self.counter >= TERMINAL_STEPS
 
+    def render(self, mode='human'):
+        '''Stub.'''
+
     def reset(self):
+        '''Stub.'''
         self.counter = 0
         return [0]*ACTION_SIZE
 
+
 @pytest.fixture(scope="module")
 def save_path():
+    '''Yield a temporary directory.'''
     with TemporaryDirectory() as tmpdir:
         yield tmpdir
 
+
 @pytest.fixture(scope="module")
 def env_obj():
-    return fake_env()
+    '''Return a stub environment.'''
+    return StubEnv()
+
 
 def test_monitor_init(save_path, env_obj):
     '''Tests __init__ method of monitor.'''
@@ -50,6 +63,7 @@ def test_monitor_init(save_path, env_obj):
     assert str(monitor.file_path).endswith(utils.Monitor.EXT)
     monitor = utils.Monitor(env_obj, None)
     assert monitor.file_path is None
+
 
 @pytest.mark.parametrize("step", STEPS)
 def test_monitor_save_without_info(save_path, env_obj, step):
@@ -72,6 +86,7 @@ def test_monitor_save_without_info(save_path, env_obj, step):
     assert 'r' in dataframe.columns
     assert 't' in dataframe.columns
     assert 'half' not in dataframe.columns
+
 
 @pytest.mark.parametrize("step", STEPS)
 def test_monitor_save_with_info(save_path, env_obj, step):
@@ -96,6 +111,7 @@ def test_monitor_save_with_info(save_path, env_obj, step):
     assert 't' in dataframe.columns
     assert 'half' in dataframe.columns
 
+
 def test_monitor_reset(save_path, env_obj):
     '''Tests monitor's reset method.'''
     save_file = Path(save_path) / 'test_reset'
@@ -108,6 +124,7 @@ def test_monitor_reset(save_path, env_obj):
 
 
 def test_monitor_step(save_path, env_obj):
+    '''Test monitor's step method.'''
     save_file = Path(save_path) / 'test_step'
     monitor = utils.Monitor(env_obj, save_file, chunk_size=1,
                             info_keywords=('half',))

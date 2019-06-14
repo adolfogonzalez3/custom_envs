@@ -1,7 +1,25 @@
 '''Module which holds math functions.'''
+from contextlib import contextmanager
 
 import numexpr
 import numpy as np
+import numpy.random as npr
+
+
+@contextmanager
+def use_random_state(random_state):
+    '''
+    Set the random state for the current context.
+
+    :param random_state: (numpy.random.RandomState) The random state generator
+                                                    to use for the context.
+    '''
+    saved_state = npr.get_state()
+    try:
+        npr.set_state(random_state.get_state())
+        yield random_state
+    finally:
+        npr.set_state(saved_state)
 
 
 def cross_entropy(prob, ground_truth):

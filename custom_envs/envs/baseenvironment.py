@@ -5,7 +5,7 @@ from abc import abstractmethod
 from gym import Env
 from gym.utils.seeding import np_random
 
-from custom_envs.utils.utils_common import use_random_state
+from custom_envs.utils.utils_math import use_random_state
 
 
 class BaseEnvironment(Env):

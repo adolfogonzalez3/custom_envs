@@ -1,12 +1,9 @@
 '''
 Module that contains common functions and classes for the package.
 '''
-from pathlib import Path
 from itertools import zip_longest, cycle, chain
-from contextlib import contextmanager
 from collections import deque
 
-import gym
 import numpy as np
 import numpy.random as npr
 
@@ -99,22 +96,6 @@ def to_onehot(array, num_of_labels=None):
     onehot = np.zeros((len(array), num_of_labels))
     onehot[np.arange(len(array)), array] = 1
     return onehot, num_of_labels
-
-
-@contextmanager
-def use_random_state(random_state):
-    '''
-    Set the random state for the current context.
-
-    :param random_state: (numpy.random.RandomState) The random state generator
-                                                    to use for the context.
-    '''
-    saved_state = npr.get_state()
-    try:
-        npr.set_state(random_state.get_state())
-        yield random_state
-    finally:
-        npr.set_state(saved_state)
 
 
 class History:

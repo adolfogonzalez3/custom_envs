@@ -6,10 +6,8 @@ import numpy.random as npr
 import custom_envs.utils.utils_common as utils
 
 BATCH_SIZES = tuple(2**np.arange(3))
-MAGNITUDE = tuple(range(3))
 NUM_OF_SEED = 3
 NUM_OF_ARRAYS = 3
-SHAPES = tuple((2**i, i + 2) for i in range(3))
 
 
 @pytest.mark.parametrize("seed", range(NUM_OF_SEED))
@@ -50,18 +48,6 @@ def test_to_onehot(size, num_of_labels):
     assert num_onehot_labels == num_of_labels
     assert onehot.shape == (size, num_of_labels)
     assert len(np.unique(onehot, axis=0)) == num_of_labels
-
-
-@pytest.mark.parametrize("seed", range(NUM_OF_SEED))
-@pytest.mark.parametrize("samples", range(10, 100, 10))
-def test_use_random_state(seed, samples):
-    '''Tests context manager use_random_state.'''
-    random_state = npr.RandomState(seed)
-    with utils.use_random_state(random_state):
-        test_context = tuple(npr.rand() for _ in range(samples))
-    random_state = npr.RandomState(seed)
-    test = tuple(random_state.rand() for _ in range(samples))
-    assert test_context == test
 
 
 def test_ravel_zip():
