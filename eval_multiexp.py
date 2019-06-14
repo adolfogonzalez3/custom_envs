@@ -58,8 +58,8 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
         steps_per_epoch = math.ceil(num_of_samples / batch_size)
     else:
         steps_per_epoch = 1
-    for epoch_no in trange(total_epochs):
-        for step in trange(steps_per_epoch):
+    for epoch_no in trange(total_epochs, leave=False):
+        for step in trange(steps_per_epoch, leave=False):
             action, *_ = model.predict(states)
             states, rewards, _, infos = dummy_env.step(action)
             info = infos[0]
@@ -82,12 +82,13 @@ def task_lr(seed, batch_size=None, total_epochs=40, data_set='mnist'):
     model = tf.keras.Sequential()
     model.add(tf.keras.layers.Dense(labels.shape[-1],
                                     input_shape=features.shape[1:],
-                                    activation='softmax'))
+                                    activation='softmax',
+                                    use_bias=True))
     model.compile(tf.train.GradientDescentOptimizer(1e-1),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     hist = model.fit(features, labels, epochs=total_epochs, verbose=0,
-                     batch_size=batch_size).history
+                     batch_size=batch_size, shuffle=True).history
     return [{'epoch': epoch, 'loss': lss, 'accuracy': acc, 'seed': seed}
             for epoch, lss, acc in enzip(hist['loss'], hist['acc'])]
 
