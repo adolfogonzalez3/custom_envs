@@ -1,17 +1,14 @@
 '''
-Module that contains common utilities for the package.
+Module that contains common functions and classes for the package.
 '''
-
 from pathlib import Path
-from itertools import zip_longest
+from itertools import zip_longest, cycle, chain
 from contextlib import contextmanager
+from collections import deque
 
 import gym
-import numexpr
 import numpy as np
 import numpy.random as npr
-
-from custom_envs.utils.utils_logging import Monitor
 
 
 def shuffle(*args, np_random=npr):
@@ -104,26 +101,6 @@ def to_onehot(array, num_of_labels=None):
     return onehot, num_of_labels
 
 
-def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
-    '''
-    Create many environments at once with optional independent logging.
-
-    :param env_name: (str) The name of an OpenAI environment to create.
-    :param log_dir: (str or None) If str then log_dir is the path to save all
-                                  log files to otherwise if None then don't
-                                  log anything.
-    :param num_of_envs: (int) The number of environments to create.
-    '''
-    envs = [gym.make(env_name, **kwarg) for _ in range(num_of_envs)]
-    if log_dir is not None:
-        log_dir = Path(log_dir)
-        envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
-                        info_keywords=('objective', 'accuracy'),
-                        chunk_size=10)
-                for i, env in enumerate(envs)]
-    return envs
-
-
 @contextmanager
 def use_random_state(random_state):
     '''
@@ -138,3 +115,84 @@ def use_random_state(random_state):
         yield random_state
     finally:
         npr.set_state(saved_state)
+
+
+class History:
+    '''A class for storing a history of arrays.'''
+
+    def __init__(self, max_history, **named_shapes):
+        '''
+        Create a History object.
+
+        :param max_history: (int) The maximum number of past arrays stored.
+        :param named_shapes: (**kwargs) Any arrays which are to be tracked.
+        '''
+        self.max_history = max_history
+        self.shapes = {name: tuple(shape) if shape else (1,)
+                       for name, shape in named_shapes.items()}
+        self.history = {key: deque([np.zeros(shape)]*self.max_history,
+                                   maxlen=self.max_history)
+                        for key, shape in self.shapes.items()}
+        self.iteration = 0
+
+    def __getitem__(self, key):
+        '''
+        Get an item from history.
+
+        :param key: (hashable) Any key able to be used by a python
+                               dictionary.
+        :return: (numpy.array) The requested item.
+        '''
+        return np.asarray(self.history[key])
+
+    def reset(self):
+        '''Reset the history.'''
+        self.history = {key: deque([np.zeros(shape)]*self.max_history,
+                                   maxlen=self.max_history)
+                        for key, shape in self.shapes.items()}
+        self.iteration = 0
+
+    def append(self, **named_items):
+        '''
+        Enqueue the named items in their appropiate places.
+
+        :param named_items: (**kwargs) Should contain all keys in the
+                                       dictionary.
+        '''
+        assert self.history.keys() == named_items.keys()
+        for name, item in named_items.items():
+            self.history[name].append(item)
+        self.iteration = (self.iteration + 1) % self.max_history
+
+    def build_multistate(self):
+        '''Build the state for multiple agents.'''
+        shape = (self.max_history, -1)
+        states = [self[key].reshape(shape).tolist()
+                  for key in self.history.keys()]
+        states = list(chain.from_iterable(states))
+        states = [cycle(state) if len(state) == 1 else state
+                  for state in states]
+        states = list(zip(*states))
+        return states
+
+
+def build_multistate(grad_history, weight_history, loss_history, version=1):
+    '''Build the state for multiple agents.'''
+    if version == 0:
+        states = [(g,) for g in grad_history[0].ravel().tolist()]
+    elif version == 1:
+        loss_flat = float(loss_history[0])
+        grad_flat = grad_history[0].ravel().tolist()
+        states = [(loss_flat, g) for g in grad_flat]
+    elif version == 2:
+        loss_flat = float(loss_history[0])
+        grad_flat = grad_history[0].ravel().tolist()
+        wght_flat = weight_history[0].ravel().tolist()
+        states = [(w, loss_flat, g) for w, g in zip(wght_flat, grad_flat)]
+    elif version == 3:
+        shape = (len(loss_history), -1)
+        loss_flat = tuple(loss_history.ravel().tolist())
+        grad_flat = list(zip(*grad_history.reshape(shape).tolist()))
+        wght_flat = list(zip(*weight_history.reshape(shape).tolist()))
+        states = [w + loss_flat + g for w, g in zip(wght_flat, grad_flat)]
+    return states

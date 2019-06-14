@@ -5,11 +5,11 @@ import numpy.random as npr
 
 import custom_envs.utils.utils_common as utils
 
-BATCH_SIZES = tuple(2**np.arange(5))
-MAGNITUDE = tuple(range(5))
-NUM_OF_SEED = 5
-NUM_OF_ARRAYS = 5
-SHAPES = tuple((2**i, i + 2) for i in range(5))
+BATCH_SIZES = tuple(2**np.arange(3))
+MAGNITUDE = tuple(range(3))
+NUM_OF_SEED = 3
+NUM_OF_ARRAYS = 3
+SHAPES = tuple((2**i, i + 2) for i in range(3))
 
 
 @pytest.mark.parametrize("seed", range(NUM_OF_SEED))
@@ -75,3 +75,57 @@ def test_enzip():
     '''Tests enzip.'''
     for i, j, _ in utils.enzip(range(10), range(100)):
         assert i == j
+
+
+def test_history_build_multistate_version_0():
+    '''Test history's build_multistate method version 0.'''
+    max_history = 3
+    gradients = npr.rand(max_history, 5, 5)
+    history = utils.History(1, gradients=(5, 5))
+    history.append(gradients=gradients[0])
+    func_states = utils.build_multistate(gradients, None, None, version=0)
+    hist_states = history.build_multistate()
+    assert func_states == hist_states
+
+
+def test_history_build_multistate_version_1():
+    '''Test history's build_multistate method version 1.'''
+    max_history = 3
+    loss = npr.rand(max_history, 1)
+    gradients = npr.rand(max_history, 5, 5)
+    history = utils.History(1, losses=(), gradients=(5, 5))
+    history.append(losses=loss[0], gradients=gradients[0])
+    func_states = utils.build_multistate(gradients, None, loss, version=1)
+    hist_states = history.build_multistate()
+    assert func_states == hist_states
+
+
+def test_history_build_multistate_version_2():
+    '''Test history's build_multistate method version 2.'''
+    max_history = 3
+    losses = npr.rand(max_history, 1)
+    weights = npr.rand(max_history, 5, 5)
+    gradients = npr.rand(max_history, 5, 5)
+    history = utils.History(1, weights=(5, 5), losses=(), gradients=(5, 5))
+    history.append(weights=weights[0], losses=losses[0],
+                   gradients=gradients[0])
+    func_states = utils.build_multistate(gradients, weights, losses, version=2)
+    hist_states = history.build_multistate()
+    assert func_states == hist_states
+
+
+def test_history_build_multistate_version_3():
+    '''Test history's build_multistate method version 2.'''
+    max_history = 3
+    losses = npr.rand(max_history, 1)
+    weights = npr.rand(max_history, 5, 5)
+    gradients = npr.rand(max_history, 5, 5)
+    history = utils.History(max_history, weights=(5, 5), losses=(),
+                            gradients=(5, 5))
+    history.append(weights=weights[0], losses=losses[0],
+                   gradients=gradients[0])
+    for wght, loss, grad in zip(weights, losses, gradients):
+        history.append(weights=wght, losses=loss, gradients=grad)
+    func_states = utils.build_multistate(gradients, weights, losses, version=3)
+    hist_states = history.build_multistate()
+    assert func_states == hist_states
