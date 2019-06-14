@@ -1,6 +1,7 @@
 '''
 Module for creating files that are contain hyperparameters for experiments.
 '''
+import json
 import sqlite3
 import argparse
 from pathlib import Path
@@ -52,7 +53,8 @@ def main():
     dataframe['total_timesteps'] = 10**7
     dataframe['env_name'] = 'MultiOptimize-v0'
     dataframe['path'] = 'results_mnist_multioptimize'
-    dataframe['batch_size'] = 32
+    kwargs = {'data_set': 'iris', 'batch_size': 32}
+    dataframe['kwargs'] = json.dumps(kwargs)
 
     if args.type == 'json':
         dataframe.to_json(file_name, orient='records', lines=True)
