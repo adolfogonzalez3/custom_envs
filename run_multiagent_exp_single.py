@@ -1,5 +1,6 @@
 '''Run an multi agent experiment.'''
 import sys
+import json
 import shutil
 import logging
 import argparse
@@ -70,8 +71,7 @@ def run_experiment(parameters):
         log_dir.mkdir(parents=True)
         parameters['commit'] = utils_file.get_commit_hash(repository_path)
         utils_file.save_json(parameters, log_dir / 'hyperparams.json')
-        env = MultiOptimize(data_set='mnist',
-                            batch_size=parameters.get('batch_size', 32))
+        env = MultiOptimize(**parameters.get('kwargs', {}))
         env.seed(parameters.get('seed'))
         parameters['model_path'] = str(log_dir / 'model.pkl')
         log_path = str(log_dir / 'monitor_{:d}')
@@ -97,52 +97,68 @@ def run_experiment(parameters):
     return parameters
 
 
-def single_task_csv():
-    '''Run an experiment given input in the command line.'''
-    alg, lrate, gamma, seed, env_name, path = sys.argv[1].rstrip().split(',')
-    lrate = float(lrate)
-    gamma = float(gamma)
-    seed = int(seed)
-    parameters = {'env_name': env_name, 'alg': alg, 'learning_rate': lrate,
-                  'gamma': gamma, 'seed': seed, 'path': path}
-    run_experiment(parameters)
-
-
-def loop_over_json_file():
+def run_batch(commandline_args):
     '''Run a series of experiment(s) given a json file of descriptions.'''
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog=__file__+' batch')
     parser.add_argument("file_path", help="The path to the file with tasks.")
-    args = parser.parse_args()
+    args = parser.parse_args(commandline_args)
     dataframe = pd.read_json(args.file_path, orient='records', lines=True)
     parameters_list = dataframe.to_dict(orient='records')
     for parameters in parameters_list:
+        if isinstance(parameters.get('kwargs'), str):
+            parameters['kwargs'] = json.loads(parameters['kwargs'])
         print(parameters)
         run_experiment(parameters)
 
 
-def main():
+def run_test(commandline_args):
     '''Test run the code.'''
-    parameters = {"alg": "PPO", "env_name": "MultiOptLRs-v0", "gamma": 0.9,
+    parameters = {"alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.5,
                   "learning_rate": 0.001, "path": "results_iriss", "seed": 0,
-                  "total_timesteps": 10**4}
-    run_experiment(parameters)
-
-
-def single_task_json():
-    '''Run only one experiment in a json file.'''
-    parser = argparse.ArgumentParser()
-    parser.add_argument("file_path", help="The path to the file with tasks.")
-    parser.add_argument("line_no", help="The line number of load.",
-                        type=int)
-    args = parser.parse_args()
-    assert args.line_no > 0
-    parameters = utils_file.load_json(args.file_path, line_no=args.line_no)
+                  "total_timesteps": 10**6,
+                  'kwargs': {'data_set': 'iris', 'batch_size': 32,
+                             'max_batches': 40}}
     print(parameters)
     run_experiment(parameters)
 
 
+def run_task(commandline_args):
+    '''Run only one experiment in a json file.'''
+    parser = argparse.ArgumentParser(prog=__file__+' run')
+    parser.add_argument("path", help="The path to save the results.")
+    parser.add_argument("--alg", help="The algorithm to use.",
+                        default='PPO')
+    parser.add_argument("--learning_rate", help="The learning rate to use.",
+                        type=float)
+    parser.add_argument("--gamma", help="The gamma to use.",
+                        type=float)
+    parser.add_argument("--seed", help="The seed to use.",
+                        type=float)
+    parser.add_argument("--env_name", help="The gamma to use.")
+    parameters = vars(parser.parse_args(commandline_args))
+    run_experiment(parameters)
+
+
+def main(commandline_args):
+    '''Main script function.'''
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", help="The command to run.",
+                        choices=['batch', 'run', 'test'])
+    args = parser.parse_args(commandline_args[:1])
+    tf.logging.set_verbosity(tf.logging.ERROR)
+    if args.command == 'batch':
+        run_batch(commandline_args[1:])
+    elif args.command == 'run':
+        run_task(commandline_args[1:])
+    elif args.command == 'test':
+        run_test(commandline_args[1:])
+
+
+
 if __name__ == '__main__':
+    
     # single_task_csv()
     # single_task_json()
-    loop_over_json_file()
-    #main()
+    # loop_over_json_file()
+    main(sys.argv[1:])
+    # run_test()
