@@ -10,7 +10,7 @@ from collections import defaultdict
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
-from tqdm import trange
+from tqdm import trange, tqdm
 from stable_baselines import PPO2, A2C, DDPG
 
 import custom_envs.utils.utils_plot as utils_plot
@@ -29,12 +29,40 @@ def run_handle(env):
         data = env.handle_requests()
 
 
+def run_agent(envs, parameters):
+    '''Train an agent.'''
+    alg = parameters['alg']
+    learning_rate = parameters['learning_rate']
+    gamma = parameters['gamma']
+    model_path = parameters['model_path']
+    set_global_seeds(parameters.get('seed'))
+    dummy_env = ThreadVecEnv(envs)
+    if alg == 'PPO':
+        model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
+                     learning_rate=learning_rate, verbose=1)
+    elif alg == 'A2C':
+        model = A2C(MlpPolicy, dummy_env, gamma=gamma,
+                    learning_rate=learning_rate, verbose=1)
+    else:
+        model = DDPG(ddpg.MlpPolicy, dummy_env, gamma=gamma, verbose=1,
+                     actor_lr=learning_rate/10, critic_lr=learning_rate)
+    try:
+        model.learn(total_timesteps=parameters.get('total_timesteps', 10**6))
+    except tf.errors.InvalidArgumentError:
+        LOGGER.error('Possible Nan, %s', str((alg, learning_rate, gamma)))
+    finally:
+        dummy_env.close()
+        model.save(str(model_path))
+
+
 def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
-    '''Run the agent on a data set.'''
+    '''
+    Run the agent on a data set.
+    '''
     alg, *_ = path.name.split('-')
     save_path = path / 'model.pkl'
     #env = MultiOptLRs(data_set=data_set, batch_size=batch_size)
-    env = MultiOptimize(data_set=data_set, batch_size=batch_size)
+    env = MultiOptimize(data_set=data_set, batch_size=batch_size, version=1)
     sequence = load_data(data_set)
     num_of_samples = len(sequence.features)
     main_environment = MultiEnvServer(env)
@@ -58,13 +86,16 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
         steps_per_epoch = math.ceil(num_of_samples / batch_size)
     else:
         steps_per_epoch = 1
+
+    cumulative_reward = 0
     for epoch_no in trange(total_epochs, leave=False):
         for step in trange(steps_per_epoch, leave=False):
             action, *_ = model.predict(states)
             states, rewards, _, infos = dummy_env.step(action)
+            cumulative_reward = cumulative_reward + rewards[0]
             info = infos[0]
             info['step'] = epoch_no*steps_per_epoch + step
-            info['reward'] = sum(rewards)
+            info['cumulative_reward'] = cumulative_reward
             info['seed'] = seed
             info['epoch'] = epoch_no
             info_list.append(info)
@@ -93,13 +124,15 @@ def task_lr(seed, batch_size=None, total_epochs=40, data_set='mnist'):
             for epoch, lss, acc in enzip(hist['loss'], hist['acc'])]
 
 
-def plot_results(axes, dataframe, groupby, targets, label=None):
+def plot_results(axes, dataframe, groupby, label=None):
+    '''Plot results on multiple axes given a dataframe.'''
     grouped = dataframe.groupby(groupby)
     mean_df = grouped.mean()
     std_df = grouped.std()
-    for axis, target in zip(axes, targets):
-        utils_plot.plot_sequence(axis, mean_df[target], label=label)
-        utils_plot.fill_between(axis, mean_df[target], std_df[target],
+    columns = set(mean_df.columns) & set(axes.keys()) - {groupby}
+    for name in columns:
+        utils_plot.plot_sequence(axes[name], mean_df[name], label=label)
+        utils_plot.fill_between(axes[name], mean_df[name], std_df[name],
                                 alpha=0.1, label=label)
 
 
@@ -107,12 +140,11 @@ def run_multi(path, trials=10, batch_size=None, total_epochs=40,
               data_set='mnist'):
     '''Run both agent evaluationg and logistic classification training.'''
     path = Path(path)
-    if True:
-        infos = list(chain.from_iterable([task(path, i, batch_size=batch_size,
-                                               total_epochs=total_epochs,
-                                               data_set=data_set)
-                                          for i in trange(trials)]))
-        dataframe_rl = pd.DataFrame(infos)
+    infos = list(chain.from_iterable([task(path, i, batch_size=batch_size,
+                                           total_epochs=total_epochs,
+                                           data_set=data_set)
+                                      for i in trange(trials)]))
+    dataframe_rl = pd.DataFrame(infos)
     infos = list(chain.from_iterable([task_lr(i, batch_size=batch_size,
                                               total_epochs=total_epochs,
                                               data_set=data_set)
@@ -121,18 +153,17 @@ def run_multi(path, trials=10, batch_size=None, total_epochs=40,
     axes = defaultdict(lambda: plt.figure().add_subplot(111))
     pyplot_attr = {
         'title': 'Performance on {} data set'.format(data_set.upper()),
-        'ylabel': 'Loss',
         'xlabel': 'Epoch',
     }
-    utils_plot.set_attributes(axes['loss'], pyplot_attr)
-    pyplot_attr['ylabel'] = 'Accuracy'
-    utils_plot.set_attributes(axes['accuracy'], pyplot_attr)
-    plot_results(axes.values(), dataframe_rl, 'epoch',
-                 ['objective', 'accuracy'], 'RL')
-    plot_results(axes.values(), dataframe_lc, 'epoch', ['loss', 'accuracy'],
-                 'Logistic Classification')
-    utils_plot.add_legend(axes['loss'])
-    utils_plot.add_legend(axes['accuracy'])
+    columns = set(dataframe_rl.select_dtypes('number').columns) - {'epoch'}
+    for column in columns:
+        pyplot_attr['ylabel'] = column.capitalize()
+        utils_plot.set_attributes(axes[column], pyplot_attr)
+
+    plot_results(axes, dataframe_rl, 'epoch', 'RL')
+    plot_results(axes, dataframe_lc, 'epoch', 'Logistic Classification')
+    for axis in axes.values():
+        utils_plot.add_legend(axis)
     plt.show()
 
 
