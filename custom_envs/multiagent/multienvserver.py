@@ -1,5 +1,4 @@
-
-from copy import deepcopy
+'''A module that contains a class for handling multiagent environments.'''
 from collections import namedtuple
 from enum import Enum
 
@@ -17,6 +16,7 @@ CloseReturnType = namedtuple('CloseReturnType', [])
 
 
 class RequestType(Enum):
+    '''Contains all types a request may be.'''
     STEP = 0
     RESET = 1
     RENDER = 2
@@ -32,12 +32,12 @@ def segment_space(space, segments):
     '''
     if isinstance(space, Box):
         size = np.prod(space.shape)
-        n = size // segments
-        n_leftover = int(np.ceil(size / segments))
+        subsize = size // segments
+        size_leftover = int(np.ceil(size / segments))
         low = np.min(space.low)
         high = np.max(space.high)
-        leftover = [Box(low, high, shape=(n_leftover,), dtype=space.dtype)]
-        return [Box(low, high, shape=(n,), dtype=space.dtype)
+        leftover = [Box(low, high, shape=(size_leftover,), dtype=space.dtype)]
+        return [Box(low, high, shape=(subsize,), dtype=space.dtype)
                 for i in range(segments-1)] + leftover
 
 
@@ -90,7 +90,7 @@ class MultiEnvServer:
                                  EnvSpawn(self.observation_spaces[name],
                                           self.action_spaces[name],
                                           self.mailbox.spawn(name))
-                                 for name in self.action_spaces.keys()
+                                 for name in self.action_spaces.spaces.keys()
                                  }
 
     def handle_requests(self, timeout=None):
@@ -134,6 +134,7 @@ class MultiEnvServer:
         return self
 
     def close(self):
+        '''Close the environment.'''
         self.mailbox.close()
         self.main_environment.close()
 
