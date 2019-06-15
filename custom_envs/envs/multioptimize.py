@@ -138,7 +138,7 @@ class MultiOptimize(BaseMultiEnvironment):
             features = self.sequence.features
             labels = self.sequence.labels
             loss, _, accu = self.model.compute_backprop(features, labels)
-        info = {'objective': loss, 'accuracy': accu,
+        info = {'loss': loss, 'accuracy': accu,
                 'weights_mean': np.mean(self.model.weights),
                 'actions_mean': np.mean(action),
                 'states_mean': np.mean(state),
