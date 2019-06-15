@@ -124,7 +124,7 @@ class History:
                                dictionary.
         :return: (numpy.array) The requested item.
         '''
-        return np.asarray(self.history[key])
+        return np.asarray(list(reversed(self.history[key])))
 
     def reset(self):
         '''Reset the history.'''
@@ -142,7 +142,7 @@ class History:
         '''
         assert self.history.keys() == named_items.keys()
         for name, item in named_items.items():
-            self.history[name].append(item)
+            self.history[name].append(np.reshape(item, self.shapes[name]))
         self.iteration = (self.iteration + 1) % self.max_history
 
     def build_multistate(self):

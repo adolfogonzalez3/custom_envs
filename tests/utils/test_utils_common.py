@@ -112,6 +112,9 @@ def test_history_build_multistate_version_3():
                    gradients=gradients[0])
     for wght, loss, grad in zip(weights, losses, gradients):
         history.append(weights=wght, losses=loss, gradients=grad)
+    gradients = np.array(list(reversed(gradients)))
+    weights = np.array(list(reversed(weights)))
+    losses = np.array(list(reversed(losses)))
     func_states = utils.build_multistate(gradients, weights, losses, version=3)
     hist_states = history.build_multistate()
     assert func_states == hist_states
