@@ -1,5 +1,6 @@
 '''A module that contains a class for handling multiagent environments.'''
-from collections import namedtuple
+from threading import Thread
+from collections import namedtuple, deque
 from enum import Enum
 
 from gym import Env
@@ -78,19 +79,24 @@ class EnvSpawn(Env):
         return self
 
 
+def run_handle(environment):
+    '''Run handle until all experiments end.'''
+    data = 0
+    while data is not None:
+        data = environment.handle_requests()
+
+
 class MultiEnvServer:
     '''A class convert a Multi agent envs into many single agent envs.'''
 
-    def __init__(self, environment):
-        self.main_environment = environment
+    def __init__(self, env):
+        self.main_environment = env
         self.mailbox = MailboxDict()
-        self.observation_spaces = environment.observation_spaces
-        self.action_spaces = environment.action_spaces
         self.sub_environments = {name:
-                                 EnvSpawn(self.observation_spaces[name],
-                                          self.action_spaces[name],
+                                 EnvSpawn(env.observation_spaces[name],
+                                          env.action_spaces[name],
                                           self.mailbox.spawn(name))
-                                 for name in self.action_spaces.spaces.keys()
+                                 for name in env.action_spaces.spaces.keys()
                                  }
 
     def handle_requests(self, timeout=None):
@@ -125,10 +131,9 @@ class MultiEnvServer:
 
     def __next__(self):
         data = self.handle_requests()
-        if data is None:
+        if data:
             raise StopIteration
-        else:
-            return data
+        return data
 
     def __iter__(self):
         return self
@@ -137,6 +142,20 @@ class MultiEnvServer:
         '''Close the environment.'''
         self.mailbox.close()
         self.main_environment.close()
+    
 
-    def __enter__(self):
-        pass
+
+class MultiEnvWrapper:
+    '''A class convert a Multi agent envs into many single agent envs.'''
+
+    def __init__(self, environment):
+        self.observation_spaces = environment.observation_spaces
+        self.action_spaces = environment.action_spaces
+        server = MultiEnvServer(environment)
+        self.sub_environments = server.sub_environments
+        self._backend = Thread(target=run_handle, args=[server],
+                               daemon=True)
+        self._backend.start()
+
+    def join(self, timeout=None):
+        self._backend.join(timeout=timeout)
