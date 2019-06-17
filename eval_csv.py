@@ -278,9 +278,10 @@ def plot_hyperparamsearch_alg2(dataframe):
                 'title': 'Model: {}'.format(alg)}
         utils_plot.set_attributes(ax, attr)
         pos = np.nanargmin(target[..., i])
+        loss = target[..., i].ravel()[pos]
         lrate = lrates[..., i].ravel()[pos]
         gamma = gammas[..., i].ravel()[pos]
-        print(alg, 10**lrate, gamma)
+        print(alg, 10**lrate, gamma, loss)
         for col in ['objective', 'accuracy']:
             ylabel = 'loss' if col == 'objective' else col
             metric_mean = mean_df.loc[(lrate, gamma, alg), col]

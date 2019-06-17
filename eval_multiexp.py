@@ -1,6 +1,6 @@
 '''Module for evaluating learned agents against different environments.'''
-import math
 import argparse
+from math import ceil
 from threading import Thread
 from pathlib import Path
 from functools import partial
@@ -29,42 +29,18 @@ def run_handle(env):
         data = env.handle_requests()
 
 
-def run_agent(envs, parameters):
-    '''Train an agent.'''
-    alg = parameters['alg']
-    learning_rate = parameters['learning_rate']
-    gamma = parameters['gamma']
-    model_path = parameters['model_path']
-    set_global_seeds(parameters.get('seed'))
-    dummy_env = ThreadVecEnv(envs)
-    if alg == 'PPO':
-        model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
-                     learning_rate=learning_rate, verbose=1)
-    elif alg == 'A2C':
-        model = A2C(MlpPolicy, dummy_env, gamma=gamma,
-                    learning_rate=learning_rate, verbose=1)
-    else:
-        model = DDPG(ddpg.MlpPolicy, dummy_env, gamma=gamma, verbose=1,
-                     actor_lr=learning_rate/10, critic_lr=learning_rate)
-    try:
-        model.learn(total_timesteps=parameters.get('total_timesteps', 10**6))
-    except tf.errors.InvalidArgumentError:
-        LOGGER.error('Possible Nan, %s', str((alg, learning_rate, gamma)))
-    finally:
-        dummy_env.close()
-        model.save(str(model_path))
-
-
 def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
     '''
     Run the agent on a data set.
     '''
     alg, *_ = path.name.split('-')
     save_path = path / 'model.pkl'
-    #env = MultiOptLRs(data_set=data_set, batch_size=batch_size)
-    env = MultiOptimize(data_set=data_set, batch_size=batch_size, version=1)
     sequence = load_data(data_set)
     num_of_samples = len(sequence.features)
+    steps_per_epoch = ceil(num_of_samples / batch_size) if batch_size else 1
+    # env = MultiOptLRs(data_set=data_set, batch_size=batch_size)
+    env = MultiOptimize(data_set=data_set, batch_size=batch_size, version=1,
+                        max_batches=steps_per_epoch*total_epochs)
     main_environment = MultiEnvServer(env)
 
     envs = [partial(lambda x: x, subenv) for subenv in
@@ -72,21 +48,16 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
     dummy_env = ThreadVecEnv(envs)
     if alg == 'PPO':
         with open(save_path, 'rb') as pkl:
-            model = PPO2.load(pkl)
+            model = PPO2.load(pkl, env=dummy_env)
     elif alg == 'A2C':
         with open(save_path, 'rb') as pkl:
-            model = A2C.load(pkl)
+            model = A2C.load(pkl, env=dummy_env)
     elif alg == 'DDPG':
-        model = DDPG.load(save_path)
+        model = DDPG.load(save_path, env=dummy_env)
     taskrun = Thread(target=run_handle, args=[main_environment])
     taskrun.start()
     states = dummy_env.reset()
     info_list = []
-    if batch_size is not None:
-        steps_per_epoch = math.ceil(num_of_samples / batch_size)
-    else:
-        steps_per_epoch = 1
-
     cumulative_reward = 0
     for epoch_no in trange(total_epochs, leave=False):
         for step in trange(steps_per_epoch, leave=False):
