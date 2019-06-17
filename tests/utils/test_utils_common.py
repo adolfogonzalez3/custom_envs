@@ -143,3 +143,33 @@ def test_history_len():
     test = {chr(97+i): (i+1,) for i in range(26)}
     history = utils.History(max_history, **test)
     assert len(history) == len(test)
+
+
+def test_history_append():
+    '''Test History's append method.'''
+    max_history = 3
+    history = utils.History(max_history, test1d=(5,), test2d=(5, 5))
+    test1d = np.arange(max_history*5).reshape((max_history, 5))
+    test2d = np.arange(max_history*25).reshape((max_history, 5, 5))
+    for i in range(max_history):
+        history.append(test1d=test1d[-(i+1)],
+                       test2d=test2d[-(i+1)])
+    assert np.all(history['test1d'] == test1d)
+    assert np.all(history['test2d'] == test2d)
+
+
+def test_history_reset():
+    '''Test History's reset method.'''
+    max_history = 3
+    history = utils.History(max_history, test1d=(5,), test2d=(5, 5))
+    test1d = np.arange(max_history*5).reshape((max_history, 5))
+    test2d = np.arange(max_history*25).reshape((max_history, 5, 5))
+    for i in range(max_history):
+        history.append(test1d=test1d[-(i+1)],
+                       test2d=test2d[-(i+1)])
+    history.reset()
+    assert np.all(history['test1d'] == 0)
+    assert np.all(history['test2d'] == 0)
+    history.reset(test1d=np.ones((5,)), test2d=np.ones((5, 5)))
+    assert np.all(history['test1d'] == 1)
+    assert np.all(history['test2d'] == 1)

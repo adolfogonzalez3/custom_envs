@@ -118,6 +118,10 @@ class History(Mapping):
                         for key, shape in self.shapes.items()}
         self.iteration = 0
 
+    def __repr__(self):
+        string = '<History<max_history={}, shapes={!r}>>'
+        return string.format(self.max_history, self.shapes)
+
     def __getitem__(self, key):
         '''
         Get an item from history.
@@ -134,11 +138,19 @@ class History(Mapping):
     def __len__(self):
         return len(self.history)
 
-    def reset(self):
+    def reset(self, **named_items):
         '''Reset the history.'''
-        self.history = {key: deque([np.zeros(shape)]*self.max_history,
-                                   maxlen=self.max_history)
-                        for key, shape in self.shapes.items()}
+        if named_items:
+            assert self.keys() == named_items.keys()
+            for name, item in named_items.items():
+                item = np.array(item)
+                assert self.shapes[name] == item.shape
+                self.history[name] = deque([item]*self.max_history,
+                                           maxlen=self.max_history)
+        else:
+            self.history = {key: deque([np.zeros(shape)]*self.max_history,
+                                       maxlen=self.max_history)
+                            for key, shape in self.shapes.items()}
         self.iteration = 0
 
     def append(self, **named_items):
@@ -150,8 +162,7 @@ class History(Mapping):
         '''
         assert self.keys() == named_items.keys()
         for name, item in named_items.items():
-            self.history[name].append(np.reshape(item,
-                                                 self.shapes[name]))
+            self.history[name].append(np.reshape(item, self.shapes[name]))
         self.iteration = (self.iteration + 1) % self.max_history
 
     def build_multistate(self):
