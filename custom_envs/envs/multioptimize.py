@@ -43,7 +43,7 @@ class MultiOptimize(BaseMultiEnvironment):
         num_of_labels = self.sequence.label_shape[0]
         feature_size = self.sequence.feature_shape[0]
         model_shape = (feature_size, num_of_labels)
-        self.model = Model(feature_size, num_of_labels)
+        self.model = Model(feature_size, num_of_labels, use_bias=True)
         model_shape = self.model.weights.shape
         self.history = History(max_history, losses=(), gradients=model_shape,
                                weights=model_shape)
@@ -115,6 +115,10 @@ class MultiOptimize(BaseMultiEnvironment):
         adjusted_loss = np.sign(adjusted_loss)
         adjusted_grad = np.sign(adjusted_grad)
         adjusted_wght = np.sign(adjusted_wght)
+        #adjusted_loss = adjusted_loss*1e3
+        #adjusted_grad = adjusted_grad*1e3
+        #adjusted_wght = adjusted_wght*1e3
+        # adjusted_grad = adjusted_grad * 1e3
 
         if self.version == 0:
             self.adjusted_history.append(gradients=adjusted_grad)
@@ -134,10 +138,10 @@ class MultiOptimize(BaseMultiEnvironment):
         terminal = self._terminal()
         terminals = {MultiOptimize.AGENT_FMT.format(i): terminal
                      for i in range(self.model.size)}
-        if terminal:
-            features = self.sequence.features
-            labels = self.sequence.labels
-            loss, _, accu = self.model.compute_backprop(features, labels)
+        #if terminal:
+        #    features = self.sequence.features
+        #    labels = self.sequence.labels
+        #    loss, _, accu = self.model.compute_backprop(features, labels)
         info = {'loss': loss, 'accuracy': accu,
                 'weights_mean': np.mean(self.model.weights),
                 'actions_mean': np.mean(action),

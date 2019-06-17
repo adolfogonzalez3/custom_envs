@@ -44,7 +44,7 @@ class MultiOptLRs(BaseMultiEnvironment):
         num_of_labels = self.sequence.label_shape[0]
         feature_size = self.sequence.feature_shape[0]
         model_shape = (feature_size, num_of_labels)
-        self.model = Model(feature_size, num_of_labels)
+        self.model = Model(feature_size, num_of_labels, use_bias=True)
         self.history = History(max_history, losses=(), gradients=model_shape,
                                weights=model_shape)
         if version == 0:
