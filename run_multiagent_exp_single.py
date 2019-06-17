@@ -17,7 +17,7 @@ from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.misc_util import set_global_seeds
 
 import custom_envs.utils.utils_file as utils_file
-from custom_envs.multiagent import MultiEnvServer
+from custom_envs.multiagent.multienvserver import MultiEnvWrapper
 from custom_envs.utils.utils_logging import Monitor
 from custom_envs.utils.utils_venv import ThreadVecEnv
 from custom_envs.envs.multioptlrs import MultiOptLRs
@@ -71,25 +71,22 @@ def run_experiment(parameters):
         log_dir.mkdir(parents=True)
         parameters['commit'] = utils_file.get_commit_hash(repository_path)
         utils_file.save_json(parameters, log_dir / 'hyperparams.json')
-        env = MultiOptimize(**parameters.get('kwargs', {}))
-        env.seed(parameters.get('seed'))
+        main_environment = MultiOptimize(**parameters.get('kwargs', {}))
+        main_environment.seed(parameters.get('seed'))
         parameters['model_path'] = str(log_dir / 'model.pkl')
         log_path = str(log_dir / 'monitor_{:d}')
-        main_environment = MultiEnvServer(env)
+        main_environment = MultiEnvWrapper(main_environment)
         env_callable = [partial(Monitor, subenv, log_path.format(i),
                                 allow_early_resets=True,
-                                info_keywords=('objective', 'accuracy'),
+                                info_keywords=('loss', 'accuracy'),
                                 chunk_size=10)
                         for i, subenv in
                         enumerate(main_environment.sub_environments.values())]
         try:
-            task = Thread(target=run_handle, args=[main_environment],
-                          daemon=True)
             taskrun = Thread(target=run_agent, args=[env_callable, parameters])
-            task.start()
             taskrun.start()
             taskrun.join()
-            task.join()
+            main_environment.join()
         except RuntimeError as error:
             LOGGER.error('%s, %s', error, parameters)
         finally:
@@ -113,11 +110,11 @@ def run_batch(commandline_args):
 
 def run_test(commandline_args):
     '''Test run the code.'''
-    parameters = {"alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.5,
-                  "learning_rate": 0.001, "path": "results_iriss", "seed": 0,
-                  "total_timesteps": 10**6,
-                  'kwargs': {'data_set': 'iris', 'batch_size': 32,
-                             'max_batches': 40}}
+    parameters = {"alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.9,
+                  "learning_rate": 0.001, "path": "results_iriss2", "seed": 0,
+                  "total_timesteps": 10**7,
+                  'kwargs': {'data_set': 'mnist', 'batch_size': 1024,
+                             'max_batches': 40, 'version': 1}}
     print(parameters)
     run_experiment(parameters)
 
