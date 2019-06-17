@@ -118,3 +118,28 @@ def test_history_build_multistate_version_3():
     func_states = utils.build_multistate(gradients, weights, losses, version=3)
     hist_states = history.build_multistate()
     assert func_states == hist_states
+
+
+def test_history_getitem():
+    '''Test History's __getindex__ method.'''
+    max_history = 3
+    history = utils.History(max_history, test1d=(5,), test2d=(5, 5))
+    assert history['test1d'].shape == (max_history, 5)
+    assert history['test2d'].shape == (max_history, 5, 5)
+
+
+def test_history_iter():
+    '''Test History's __iter__ method.'''
+    max_history = 3
+    test = {chr(97+i): (i+1,) for i in range(26)}
+    history = utils.History(max_history, **test)
+    for key, history_key in zip(test, history):
+        assert key == history_key
+
+
+def test_history_len():
+    '''Test History's __len__ method.'''
+    max_history = 3
+    test = {chr(97+i): (i+1,) for i in range(26)}
+    history = utils.History(max_history, **test)
+    assert len(history) == len(test)

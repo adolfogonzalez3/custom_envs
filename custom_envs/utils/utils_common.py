@@ -3,6 +3,7 @@ Module that contains common functions and classes for the package.
 '''
 from itertools import zip_longest, cycle, chain
 from collections import deque
+from collections.abc import Mapping
 
 import numpy as np
 import numpy.random as npr
@@ -98,7 +99,7 @@ def to_onehot(array, num_of_labels=None):
     return onehot, num_of_labels
 
 
-class History:
+class History(Mapping):
     '''A class for storing a history of arrays.'''
 
     def __init__(self, max_history, **named_shapes):
@@ -108,6 +109,7 @@ class History:
         :param max_history: (int) The maximum number of past arrays stored.
         :param named_shapes: (**kwargs) Any arrays which are to be tracked.
         '''
+
         self.max_history = max_history
         self.shapes = {name: tuple(shape) if shape else (1,)
                        for name, shape in named_shapes.items()}
@@ -126,6 +128,12 @@ class History:
         '''
         return np.asarray(list(reversed(self.history[key])))
 
+    def __iter__(self):
+        return iter(self.history)
+
+    def __len__(self):
+        return len(self.history)
+
     def reset(self):
         '''Reset the history.'''
         self.history = {key: deque([np.zeros(shape)]*self.max_history,
@@ -140,16 +148,17 @@ class History:
         :param named_items: (**kwargs) Should contain all keys in the
                                        dictionary.
         '''
-        assert self.history.keys() == named_items.keys()
+        assert self.keys() == named_items.keys()
         for name, item in named_items.items():
-            self.history[name].append(np.reshape(item, self.shapes[name]))
+            self.history[name].append(np.reshape(item,
+                                                 self.shapes[name]))
         self.iteration = (self.iteration + 1) % self.max_history
 
     def build_multistate(self):
         '''Build the state for multiple agents.'''
         shape = (self.max_history, -1)
         states = [self[key].reshape(shape).tolist()
-                  for key in self.history.keys()]
+                  for key in self]
         states = list(chain.from_iterable(states))
         states = [cycle(state) if len(state) == 1 else state
                   for state in states]
