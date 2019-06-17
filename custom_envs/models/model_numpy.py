@@ -1,4 +1,4 @@
-
+'''A module containing a class for model using numpy and numexpr.'''
 import numexpr
 import numpy as np
 import numpy.random as npr
@@ -6,18 +6,22 @@ import numpy.random as npr
 from custom_envs.models.model import ModelBase
 from custom_envs.utils.utils_math import softmax, cross_entropy
 
+
 class ModelNumpy(ModelBase):
     '''
     A model that uses a numpy backend.
     '''
-    def __init__(self, feature_size, num_of_labels):
+
+    def __init__(self, feature_size, num_of_labels, use_bias=False):
         '''
         Create a model.
-        
+
         :param feature_size: (int) The number of features.
         :param num_of_labels: (int) The number of labels.
         '''
+        feature_size = feature_size + 1 if use_bias else feature_size
         self._weights = npr.normal(size=(feature_size, num_of_labels))
+        self.use_bias = use_bias
 
     @property
     def weights(self):
@@ -40,6 +44,8 @@ class ModelNumpy(ModelBase):
         '''
         Forward pass of the model.
         '''
+        if self.use_bias:
+            features = np.append(features, np.ones((len(features), 1)), axis=1)
         return softmax(features @ self.weights)
 
     def compute_loss(self, features, labels, acts=None):
@@ -57,7 +63,8 @@ class ModelNumpy(ModelBase):
         '''
         if acts is None:
             acts = self.forward(features)
-        #gradient = numexpr.evaluate('(-acts*(1-acts)) * (labels - acts)')
+        if self.use_bias:
+            features = np.append(features, np.ones((len(features), 1)), axis=1)
         gradient = numexpr.evaluate('(acts - labels)')
         return features.T @ gradient
 
