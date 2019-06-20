@@ -3,6 +3,8 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from contextlib import contextmanager
 
 
 def load_json(path, line_no=None):
@@ -51,6 +53,7 @@ def get_commit_hash(path=None):
         raise RuntimeError("Path doesn't point to a repository.")
     return commit.rstrip().decode()
 
+
 def remove_suffixes(path):
     '''
     Retrieve path without any suffixes.
@@ -63,7 +66,8 @@ def remove_suffixes(path):
         path = path.with_suffix('')
     return path
 
-def decompress(source, destination=None, remove=False):
+
+def decompress_dir(source, destination=None, remove=False):
     '''
     Decompress a file pointed to by the file_path.
 
@@ -84,9 +88,9 @@ def decompress(source, destination=None, remove=False):
     return destination.with_name(source_name.name)
 
 
-def compress(source, destination=None, remove=False):
+def compress_dir(source, destination=None, remove=False):
     '''
-    Compress a file pointed to by the file_path.
+    Compress a directory pointed to by the file_path.
 
     :param source: (pathlike) The path to the directory.
     :param destination: (pathlike) The path to the file.
@@ -100,9 +104,42 @@ def compress(source, destination=None, remove=False):
     if destination.is_dir():
         destination = destination / remove_suffixes(source).name
         destination = destination.with_suffix('.zip')
-    destination = Path(destination) 
+    destination = Path(destination)
     compress_fmt = ''.join(reversed(destination.suffixes)).replace('.', '')
     shutil.make_archive(remove_suffixes(destination), compress_fmt, source)
     if remove:
         shutil.rmtree(source)
     return destination
+
+
+@contextmanager
+def create_directory(path, temporary=True, compress=True):
+    '''
+    Create a directory and yield the path.
+
+    :param temporary: (bool) If True then path returned is to a temporary
+                             directory which is moved afterwards to the true
+                             directory.
+    :param compress: (bool) If True then the directory is compressed after
+                            the scope closes.
+    :yield: (str) The path to the directory.
+    '''
+    path = Path(path)
+    if temporary:
+        with TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir) / path.name
+            tmpdir.mkdir()
+            yield tmpdir
+            if compress:
+                path = path if path.suffix else path.with_suffix('.zip')
+                compress_dir(tmpdir, path)
+            else:
+                shutil.move(tmpdir, path)
+    else:
+        path.mkdir()
+        yield path
+        if compress:
+            path = path if path.suffix else path.with_suffix('.zip')
+            compress_dir(path, path, remove=True)
+        else:
+            shutil.move(path, path)

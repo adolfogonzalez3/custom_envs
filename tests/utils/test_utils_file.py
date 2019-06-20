@@ -28,6 +28,7 @@ def create_test_file(path, name=None, version=0):
 
 @pytest.fixture(scope="module")
 def save_path():
+    '''Create a temporary directory for testing.'''
     with TemporaryDirectory() as tmpdir:
         yield Path(tmpdir)
 
@@ -74,33 +75,56 @@ def test_remove_suffixes(save_path):
     assert utils_file.remove_suffixes('test.tar.tar.tar') == Path('test')
 
 
-def test_decompress(save_path):
-    '''Test decompress function.'''
+def test_decompress_dir(save_path):
+    '''Test decompress_dir function.'''
     target_dir = save_path / 'test_decompress'
     target_dir.mkdir()
-    for i in range(10):
-        create_test_file(target_dir, name=str(i))
+    file_names = {create_test_file(target_dir, name=str(i)).name
+                  for i in range(10)}
     shutil.make_archive(target_dir, 'xztar', target_dir)
     shutil.rmtree(target_dir)
-    decompress_path = utils_file.decompress(target_dir.with_suffix('.tar.xz'),
-                                            save_path)
-    assert decompress_path.is_dir()
-    shutil.rmtree(decompress_path)
-    decompress_path = utils_file.decompress(target_dir.with_suffix('.tar.xz'),
-                                            save_path, remove=True)
-    assert decompress_path.is_dir()
+    dcomp_path = utils_file.decompress_dir(target_dir.with_suffix('.tar.xz'),
+                                           save_path)
+    assert dcomp_path.is_dir()
+    assert file_names == {path.name for path in dcomp_path.iterdir()}
+    shutil.rmtree(dcomp_path)
+    dcomp_path = utils_file.decompress_dir(target_dir.with_suffix('.tar.xz'),
+                                           save_path, remove=True)
+    assert dcomp_path.is_dir()
+    assert file_names == {path.name for path in dcomp_path.iterdir()}
     assert not target_dir.with_suffix('.tar.xz').exists()
 
 
-def test_compress(save_path):
-    '''Test decompress function.'''
+def test_compress_dir(save_path):
+    '''Test compress_dir function.'''
     target_dir = save_path / 'test_compress'
     target_dir.mkdir()
-    for i in range(10):
-        create_test_file(target_dir, name=str(i))
-    compressed_file = utils_file.compress(target_dir, save_path)
-    assert compressed_file.is_file()
-    compressed_file.unlink()
-    compressed_file = utils_file.compress(target_dir, save_path, remove=True)
-    assert compressed_file.is_file()
+    _ = {create_test_file(target_dir, name=str(i)) for i in range(10)}
+    comp_file = utils_file.compress_dir(target_dir, save_path)
+    assert comp_file.is_file()
+    comp_file.unlink()
+    comp_file = utils_file.compress_dir(target_dir, save_path, remove=True)
+    assert comp_file.is_file()
     assert not target_dir.exists()
+
+
+def test_create_directory(save_path):
+    '''Test create_directory function.'''
+    save_path = save_path / 'test_create_directory'
+    tmpdir = save_path / 'tmpdir'
+    with utils_file.create_directory(tmpdir) as path_dir:
+        _ = {create_test_file(path_dir, name=str(i)) for i in range(10)}
+    assert tmpdir.with_suffix('.zip').exists()
+    assert tmpdir.with_suffix('.zip').is_file()
+    tmpdir.with_suffix('.zip').unlink()
+    with utils_file.create_directory(tmpdir, compress=False) as path_dir:
+        _ = {create_test_file(path_dir, name=str(i)) for i in range(10)}
+    assert tmpdir.exists()
+    assert tmpdir.is_dir()
+    shutil.rmtree(tmpdir)
+    comp_tmpdir = tmpdir.with_suffix('.tar.xz')
+    with utils_file.create_directory(comp_tmpdir) as path_dir:
+        _ = {create_test_file(path_dir, name=str(i)) for i in range(10)}
+    assert comp_tmpdir.exists()
+    assert comp_tmpdir.is_file()
+    comp_tmpdir.unlink()
