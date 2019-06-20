@@ -1,5 +1,6 @@
 '''Utilities for the manipulation of files.'''
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -49,3 +50,59 @@ def get_commit_hash(path=None):
     if not commit:
         raise RuntimeError("Path doesn't point to a repository.")
     return commit.rstrip().decode()
+
+def remove_suffixes(path):
+    '''
+    Retrieve path without any suffixes.
+
+    :param path: (pathlike) A pathlike object that may have suffixes.
+    :return: (Path) A Path object without suffixes.
+    '''
+    path = Path(path)
+    for _ in range(len(path.suffixes)):
+        path = path.with_suffix('')
+    return path
+
+def decompress(source, destination=None, remove=False):
+    '''
+    Decompress a file pointed to by the file_path.
+
+    :param source: (pathlike) The path to the compressed file.
+    :param destination: (pathlike) The destination path.
+    :param remove: (bool) If True then remove compressed file.
+    :return: (str) Path to decompressed directory.
+    '''
+    source = Path(source)
+    source_name = remove_suffixes(source)
+    assert source.is_file()
+    destination = Path(destination) if destination else source_name
+    if destination.is_dir():
+        destination = destination / source_name.name
+    shutil.unpack_archive(source, destination)
+    if remove:
+        source.unlink()
+    return destination.with_name(source_name.name)
+
+
+def compress(source, destination=None, remove=False):
+    '''
+    Compress a file pointed to by the file_path.
+
+    :param source: (pathlike) The path to the directory.
+    :param destination: (pathlike) The path to the file.
+    :param remove: (bool) If True then remove source directory.
+    :return: (str) Path to compressed file.
+    '''
+    source = Path(source)
+    assert source.is_dir()
+    if destination is None:
+        destination = source.with_suffix('.zip')
+    if destination.is_dir():
+        destination = destination / remove_suffixes(source).name
+        destination = destination.with_suffix('.zip')
+    destination = Path(destination) 
+    compress_fmt = ''.join(reversed(destination.suffixes)).replace('.', '')
+    shutil.make_archive(remove_suffixes(destination), compress_fmt, source)
+    if remove:
+        shutil.rmtree(source)
+    return destination
