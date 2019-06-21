@@ -60,7 +60,6 @@ def load_data(name='iris', batch_size=None, num_of_labels=None):
         data = np.load((path / name).with_suffix('.npz'))['data']
         features = normalize(data[..., :-1])
         labels, _ = to_onehot(data[..., -1], num_of_labels)
-        features = np.roll(features, 1, axis=1)
     elif name == 'mnist':
         features, labels = load_mnist('mnist')
         features = [f.reshape((28, 28)) for f in features]
