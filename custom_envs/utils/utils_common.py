@@ -143,8 +143,7 @@ class History(Mapping):
         if named_items:
             assert self.keys() == named_items.keys()
             for name, item in named_items.items():
-                item = np.array(item)
-                assert self.shapes[name] == item.shape
+                item = np.reshape(item, self.shapes[name])
                 self.history[name] = deque([item]*self.max_history,
                                            maxlen=self.max_history)
         else:
