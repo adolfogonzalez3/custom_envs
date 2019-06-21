@@ -69,6 +69,8 @@ class OptVecEnv(VecEnv):
         for environment in self.environments:
             actions_env = actions[start:(start + environment.agents)]
             states, rewards, terminals, infos = environment.step(actions_env)
+            if np.all(terminals):
+                states = environment.reset()
             self.states.append(states)
             self.rewards.append(rewards)
             self.terminals.append(terminals)
@@ -77,8 +79,8 @@ class OptVecEnv(VecEnv):
 
     def step_wait(self):
         states = np.stack(list(chain.from_iterable(self.states)))
-        rewards = np.array(list(chain.from_iterable(self.rewards)))
-        terminals = np.array(list(chain.from_iterable(self.terminals)))
+        rewards = np.stack(list(chain.from_iterable(self.rewards)))
+        terminals = np.stack(list(chain.from_iterable(self.terminals)))
         infos = list(chain.from_iterable(self.infos))
         self.states = []
         self.rewards = []
