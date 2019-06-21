@@ -1,3 +1,4 @@
+'''Module for creating vectorized environment runners.'''
 import multiprocessing as mp
 from threading import Thread
 from collections import OrderedDict
@@ -95,7 +96,8 @@ class ConcurrentVecEnv(VecEnv):
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
-        return _flatten_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos
+        return (_flatten_obs(obs, self.observation_space), np.stack(rews),
+                np.stack(dones), infos)
 
     def reset(self):
         for remote in self.remotes:
@@ -115,11 +117,13 @@ class ConcurrentVecEnv(VecEnv):
             process.join()
         self.closed = True
 
-    def render(self, mode='human', *args, **kwargs):
+    def render(self, *args, **kwargs):
+        mode = kwargs.get('mode', 'human')
+        kwargs['mode'] = 'rgb_array'
         for pipe in self.remotes:
             # gather images from subprocesses
             # `mode` will be taken into account later
-            pipe.send(('render', (args, {'mode': 'rgb_array', **kwargs})))
+            pipe.send(('render', (args, kwargs)))
         imgs = [pipe.recv() for pipe in self.remotes]
         # Create a big image by tiling images from subprocesses
         bigimg = tile_images(imgs)
@@ -140,11 +144,13 @@ class ConcurrentVecEnv(VecEnv):
 
     def env_method(self, method_name, *method_args, **method_kwargs):
         """
-        Provides an interface to call arbitrary class methods of vectorized environments
+        Call an arbitrary class methods on a vectorized environment.
 
         :param method_name: (str) The name of the env class method to invoke
-        :param method_args: (tuple) Any positional arguments to provide in the call
-        :param method_kwargs: (dict) Any keyword arguments to provide in the call
+        :param method_args: (tuple) Any positional arguments to provide in the
+                                    call
+        :param method_kwargs: (dict) Any keyword arguments to provide in the
+                                     call
         :return: (list) List of items retured by each environment's method call
         """
 
@@ -215,6 +221,7 @@ def _flatten_obs(obs, space):
         return tuple((np.stack([o[i] for o in obs]) for i in range(obs_len)))
     else:
         return np.stack(obs)
+
 
 class SubprocVecEnv(ConcurrentVecEnv):
     """
