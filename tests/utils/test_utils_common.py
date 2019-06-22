@@ -1,4 +1,6 @@
 '''Tests utils_common module.'''
+from itertools import chain
+
 import pytest
 import numpy as np
 import numpy.random as npr
@@ -173,3 +175,25 @@ def test_history_reset():
     history.reset(test1d=np.ones((5,)), test2d=np.ones((5, 5)))
     assert np.all(history['test1d'] == 1)
     assert np.all(history['test2d'] == 1)
+
+
+def test_flatten_arrays():
+    '''Test flatten_arrays function.'''
+    arrays = [npr.rand(i+1, i+1) for i in range(10)]
+    total_size = sum(a.size for a in arrays)
+    flattened_array = utils.flatten_arrays(arrays)
+    assert flattened_array.size == total_size
+    arrays = [a.ravel() for a in arrays]
+    for num, fnum in zip(chain.from_iterable(arrays), flattened_array):
+        assert num == fnum
+
+
+def test_from_flat():
+    '''Test from_flat function.'''
+    shapes = [(i+1, i+1) for i in range(10)]
+    arrays = [npr.rand(*shape) for shape in shapes]
+    flattened_array = utils.flatten_arrays(arrays)
+    reshaped_arrays = utils.from_flat(flattened_array, shapes)
+    assert len(arrays) == len(reshaped_arrays)
+    for array, rarray in zip(arrays, reshaped_arrays):
+        assert np.all(array == rarray)

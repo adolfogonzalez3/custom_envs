@@ -196,3 +196,32 @@ def build_multistate(grad_history, weight_history, loss_history, version=1):
         wght_flat = list(zip(*weight_history.reshape(shape).tolist()))
         states = [w + loss_flat + g for w, g in zip(wght_flat, grad_flat)]
     return states
+
+
+def flatten_arrays(arrays, dtype=np.float64):
+    '''
+    Flatten a list of numpy arrays into a single numpy array.
+
+    :param arrays: ([numpy.array]) A list of numpy arrays.
+    :return: (numpy.array) A numpy array.
+    '''
+    return np.fromiter(chain.from_iterable(a.ravel() for a in arrays),
+                       dtype, sum(a.size for a in arrays))
+
+
+def from_flat(array, shapes):
+    '''
+    Reshape a list of arrays from a single array.
+
+    :param array: (numpy.array) A numpy array.
+    :param shapes: ([(int, ...)]) A list of shapes which may vary in
+                                  dimensions.
+    :return: ([numpy.array]) A list of numpy arrays.
+    '''
+    start = 0
+    arrays = []
+    for shape in shapes:
+        end = start + np.prod(shape)
+        arrays.append(np.reshape(array[start:end], shape))
+        start = end
+    return arrays
