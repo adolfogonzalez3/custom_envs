@@ -40,9 +40,6 @@ class OptEnvRunner:
         rewards = [rewards]*len(states)
         terminals = [terminals]*len(states)
         infos = [infos]*len(states)
-        #rewards = flatten_dictionary(rewards)
-        #terminals = flatten_dictionary(terminals)
-        #infos = flatten_dictionary(infos)
         return states, rewards, terminals, infos
 
 

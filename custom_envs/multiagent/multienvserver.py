@@ -1,6 +1,6 @@
 '''A module that contains a class for handling multiagent environments.'''
 from threading import Thread
-from collections import namedtuple, deque
+from collections import namedtuple
 from enum import Enum
 
 from gym import Env
@@ -92,12 +92,12 @@ class MultiEnvServer:
     def __init__(self, env):
         self.main_environment = env
         self.mailbox = MailboxDict()
-        self.sub_environments = {name:
-                                 EnvSpawn(env.observation_spaces[name],
-                                          env.action_spaces[name],
-                                          self.mailbox.spawn(name))
-                                 for name in env.action_spaces.spaces.keys()
-                                 }
+        self.sub_environments = {
+            name: EnvSpawn(env.observation_space[name],
+                           env.action_space[name],
+                           self.mailbox.spawn(name))
+            for name in env.action_space.spaces.keys()
+        }
 
     def handle_requests(self, timeout=None):
         '''
@@ -142,7 +142,6 @@ class MultiEnvServer:
         '''Close the environment.'''
         self.mailbox.close()
         self.main_environment.close()
-    
 
 
 class MultiEnvWrapper:

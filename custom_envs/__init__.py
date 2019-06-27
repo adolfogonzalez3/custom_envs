@@ -33,3 +33,8 @@ register(
     id='MultiOptLRs-v0',
     entry_point='custom_envs.envs.multioptlrs:MultiOptLRs'
 )
+
+register(
+    id='MultiOptimize-v0',
+    entry_point='custom_envs.envs.multioptimize:MultiOptimize'
+)

@@ -3,6 +3,7 @@ import numexpr
 import numpy as np
 import numpy.random as npr
 
+import custom_envs.utils.utils_common as common
 from custom_envs.models.model import ModelBase
 from custom_envs.utils.utils_math import softmax, cross_entropy
 
@@ -22,23 +23,25 @@ class ModelNumpy(ModelBase):
         feature_size = feature_size + 1 if use_bias else feature_size
         self._weights = npr.normal(size=(feature_size, num_of_labels))
         self.use_bias = use_bias
+        self.shapes = [(feature_size, num_of_labels)]
+        self._size = self.weights.size
 
     @property
     def weights(self):
-        return self._weights
+        return common.flatten_arrays([self._weights])
 
     @property
     def size(self):
         '''
         Return the number of parameters in the model.
         '''
-        return self.weights.size
+        return self._size
 
-    def reset(self, np_random=npr):
+    def reset(self):
         '''
         Reset the model's parameters with a normal distribution.
         '''
-        self._weights = np_random.normal(size=self.weights.shape)
+        self._weights = npr.normal(size=self._weights.shape)
 
     def forward(self, features):
         '''
@@ -46,18 +49,15 @@ class ModelNumpy(ModelBase):
         '''
         if self.use_bias:
             features = np.append(features, np.ones((len(features), 1)), axis=1)
-        return softmax(features @ self.weights)
+        return softmax(features @ self._weights)
 
-    def compute_loss(self, features, labels, acts=None):
+    def _compute_loss(self, labels, acts):
         '''
         Compute the loss given the features and labels.
         '''
-        if acts is None:
-            acts = self.forward(features)
-        objective = cross_entropy(acts, labels)
-        return objective
+        return cross_entropy(acts, labels)
 
-    def compute_gradients(self, features, labels, acts=None):
+    def _compute_gradients(self, features, labels, acts):
         '''
         Compute the gradients of all parameters in respect to the cost.
         '''
@@ -65,37 +65,59 @@ class ModelNumpy(ModelBase):
             acts = self.forward(features)
         if self.use_bias:
             features = np.append(features, np.ones((len(features), 1)), axis=1)
-        gradient = numexpr.evaluate('(acts - labels)')
-        return features.T @ gradient
+        numvars = {'acts': acts, 'labels': labels}
+        gradient = numexpr.evaluate('(acts - labels)', local_dict=numvars)
+        return common.flatten_arrays([features.T @ gradient])
 
-    def compute_accuracy(self, features, labels, acts=None):
+    def _compute_accuracy(self, labels, acts):
         '''
         Compute the accuracy.
         '''
-        if acts is None:
-            acts = self.forward(features)
-        predictions = np.argmax(acts, axis=1)
-        true = np.argmax(labels, axis=1)
-        return np.mean(predictions == true)
+        predictions = np.argmax(acts, axis=-1)
+        true_labels = np.argmax(labels, axis=-1)
+        return np.mean(predictions == true_labels)
+
+    def compute_loss(self, features, labels):
+        '''
+        Compute the loss given the features and labels.
+        '''
+        return self._compute_loss(labels, self.forward(features))
+
+    def compute_gradients(self, features, labels):
+        '''
+        Compute the gradients of all parameters in respect to the cost.
+        '''
+        acts = self.forward(features)
+        return self._compute_gradients(features, labels, acts)
+
+    def compute_accuracy(self, features, labels):
+        '''
+        Compute the accuracy.
+
+        :param features: (numpy.array) A numpy array of features.
+        :param labels: (numpy.array) A numpy array of labels.
+        :return: (float) A floating point number.
+        '''
+        return self._compute_accuracy(labels, self.forward(features))
 
     def compute_backprop(self, features, labels):
         '''
         Compute loss, gradients, and accuracy.
         '''
         acts = self.forward(features)
-        loss = self.compute_loss(features, labels, acts=acts)
-        gradients = self.compute_gradients(features, labels, acts=acts)
-        accuracy = self.compute_accuracy(features, labels, acts=acts)
+        gradients = self._compute_gradients(features, labels, acts=acts)
+        accuracy = self._compute_accuracy(labels, acts=acts)
+        loss = self._compute_loss(labels, acts=acts)
         return loss, gradients, accuracy
 
     def set_weights(self, weights):
         '''
         Set the weights of the model.
         '''
-        self._weights = weights
+        self._weights = common.from_flat(weights, self.shapes)[0]
 
     def get_weights(self):
         '''
         Get the weights of the model.
         '''
-        return self.weights
+        return common.flatten_arrays([self.weights])

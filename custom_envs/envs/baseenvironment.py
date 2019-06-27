@@ -57,51 +57,8 @@ class BaseEnvironment(Env):
         pass
 
 
-class BaseMultiEnvironment(Env):
+class BaseMultiEnvironment(BaseEnvironment):
     '''
     An abstract class inherited by all Multi agent environments in the package.
     '''
-
-    def __init__(self):
-        self.random_generator, _ = np_random()
-        self.current_step = 0
-
-    def seed(self, seed=None):
-        '''
-        Seed the environment's random generator.
-
-        :param seed: (int or None) If an integer then seed is used to seed the
-                                   random generator otherwise if None then
-                                   use seed = 0.
-        '''
-        self.random_generator, _ = np_random(seed)
-
-    def step(self, action):
-        '''
-        Take one step in the environment.
-
-        :param action: (numpy.array) An action that follows the rules of the
-                                     action space.
-        '''
-        self.current_step += 1
-        with use_random_state(self.random_generator):
-            states, rewards, terminals, infos = self.base_step(action)
-        for name in infos.keys():
-            infos[name].update({'r': rewards[name], 'l': self.current_step})
-        return states, rewards, terminals, infos
-
-    def reset(self):
-        '''
-        Reset the environment.
-        '''
-        self.current_step = 0
-        with use_random_state(self.random_generator):
-            return self.base_reset()
-
-    @abstractmethod
-    def base_step(self, action):
-        pass
-
-    @abstractmethod
-    def base_reset(self):
-        pass
+    AGENT_FMT = 'parameter-{:d}'

@@ -3,9 +3,9 @@ A module that contains the abstract class for implementing models classes.
 '''
 from abc import ABC, abstractmethod
 
-import numpy.random as npr
 
 from custom_envs.utils.utils_common import batchify_zip
+
 
 class ModelBase(ABC):
     '''
@@ -18,7 +18,6 @@ class ModelBase(ABC):
         '''
         Return the number of parameters in the model.
         '''
-        pass
 
     @property
     @abstractmethod
@@ -26,62 +25,57 @@ class ModelBase(ABC):
         '''
         Return the parameters of the model.
         '''
-        pass
 
     @abstractmethod
-    def reset(self, np_random=npr):
+    def reset(self):
         '''
         Reset the model's parameters with a normal distribution.
         '''
-        pass
 
     @abstractmethod
     def forward(self, features):
         '''
         Forward pass of the model.
         '''
-        pass
 
     @abstractmethod
     def compute_loss(self, features, labels):
         '''
         Compute the loss given the features and labels.
         '''
-        pass
 
     @abstractmethod
     def compute_gradients(self, features, labels):
         '''
         Compute the gradients of all parameters in respect to the cost.
         '''
-        pass
 
     @abstractmethod
-    def compute_accuracy(self, features, labels, acts=None):
+    def compute_accuracy(self, features, labels):
         '''
         Compute the accuracy.
         '''
-        pass
-
-    def compute_backprop(self, features, labels):
-        '''
-        Compute loss, gradients, and accuracy.
-        '''
-        pass
 
     @abstractmethod
     def set_weights(self, weights):
         '''
         Set the weights of the model.
         '''
-        pass
 
     @abstractmethod
     def get_weights(self):
         '''
         Get the weights of the model.
         '''
-        pass
+
+    def compute_backprop(self, features, labels):
+        '''
+        Compute loss, gradients, and accuracy.
+        '''
+        gradients = self.compute_gradients(features, labels)
+        accuracy = self.compute_accuracy(features, labels)
+        loss = self.compute_loss(features, labels)
+        return loss, gradients, accuracy
 
     def compute_accuracy_batch(self, features, labels, batch_size=32):
         '''Compute the accuracy using batches.'''

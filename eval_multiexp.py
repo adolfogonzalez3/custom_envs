@@ -1,5 +1,6 @@
 '''Module for evaluating learned agents against different environments.'''
 import argparse
+import os
 from math import ceil
 from threading import Thread
 from pathlib import Path
@@ -7,6 +8,8 @@ from functools import partial
 from itertools import chain
 from collections import defaultdict
 
+import gym
+import numpy as np
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,6 +23,27 @@ from custom_envs.envs.multioptimize import MultiOptimize
 from custom_envs.envs.multioptlrs import MultiOptLRs
 from custom_envs.utils.utils_common import enzip
 from custom_envs.data import load_data
+from custom_envs.vectorize import OptVecEnv
+import custom_envs.utils.utils_file as utils_file
+
+
+def flatten_arrays(arrays):
+    return list(chain.from_iterable(a.ravel().tolist() for a in arrays))
+
+
+class CustomCallback(tf.keras.callbacks.Callback):
+    def on_train_begin(self, logs=None):
+        self.epoch = []
+        self.history = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        self.epoch.append(epoch)
+        self.history.append({
+            'epoch': epoch,
+            'weights_mean': np.mean(flatten_arrays(self.model.get_weights())),
+            **logs
+        })
 
 
 def run_handle(env):
@@ -33,36 +57,33 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
     '''
     Run the agent on a data set.
     '''
+    parameters = utils_file.load_json(path / 'hyperparams.json')
     alg, *_ = path.name.split('-')
     save_path = path / 'model.pkl'
     sequence = load_data(data_set)
     num_of_samples = len(sequence.features)
     steps_per_epoch = ceil(num_of_samples / batch_size) if batch_size else 1
-    # env = MultiOptLRs(data_set=data_set, batch_size=batch_size)
-    env = MultiOptimize(data_set=data_set, batch_size=batch_size, version=1,
-                        max_batches=steps_per_epoch*total_epochs)
-    main_environment = MultiEnvServer(env)
-
-    envs = [partial(lambda x: x, subenv) for subenv in
-            main_environment.sub_environments.values()]
-    dummy_env = ThreadVecEnv(envs)
+    kwargs = parameters.get('kwargs', {})
+    kwargs['data_set'] = data_set
+    kwargs['batch_size'] = batch_size
+    kwargs['max_batches'] = steps_per_epoch*total_epochs
+    env = partial(gym.make, parameters['env_name'], **kwargs)
+    vec_env = OptVecEnv([env])
     if alg == 'PPO':
         with open(save_path, 'rb') as pkl:
-            model = PPO2.load(pkl, env=dummy_env)
+            model = PPO2.load(pkl)#, env=vec_env)
     elif alg == 'A2C':
         with open(save_path, 'rb') as pkl:
-            model = A2C.load(pkl, env=dummy_env)
+            model = A2C.load(pkl, env=vec_env)
     elif alg == 'DDPG':
-        model = DDPG.load(save_path, env=dummy_env)
-    taskrun = Thread(target=run_handle, args=[main_environment])
-    taskrun.start()
-    states = dummy_env.reset()
+        model = DDPG.load(save_path, env=vec_env)
+    states = vec_env.reset()
     info_list = []
     cumulative_reward = 0
     for epoch_no in trange(total_epochs, leave=False):
         for step in trange(steps_per_epoch, leave=False):
-            action, *_ = model.predict(states)
-            states, rewards, _, infos = dummy_env.step(action)
+            actions = model.predict(states, deterministic=True)[0]
+            states, rewards, _, infos = vec_env.step(actions)
             cumulative_reward = cumulative_reward + rewards[0]
             info = infos[0]
             info['step'] = epoch_no*steps_per_epoch + step
@@ -70,8 +91,6 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
             info['seed'] = seed
             info['epoch'] = epoch_no
             info_list.append(info)
-    dummy_env.close()
-    taskrun.join()
     return info_list
 
 
@@ -89,10 +108,10 @@ def task_lr(seed, batch_size=None, total_epochs=40, data_set='mnist'):
     model.compile(tf.train.GradientDescentOptimizer(1e-1),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
-    hist = model.fit(features, labels, epochs=total_epochs, verbose=0,
-                     batch_size=batch_size, shuffle=True).history
-    return [{'epoch': epoch, 'loss': lss, 'accuracy': acc, 'seed': seed}
-            for epoch, lss, acc in enzip(hist['loss'], hist['acc'])]
+    callback = CustomCallback()
+    model.fit(features, labels, epochs=total_epochs, verbose=0, shuffle=True,
+              batch_size=batch_size, callbacks=[callback])
+    return callback.history
 
 
 def plot_results(axes, dataframe, groupby, label=None):
@@ -120,7 +139,10 @@ def run_multi(path, trials=10, batch_size=None, total_epochs=40,
                                               total_epochs=total_epochs,
                                               data_set=data_set)
                                       for i in trange(trials)]))
-    dataframe_lc = pd.DataFrame(infos)
+    dataframe_lc = pd.DataFrame.from_dict(infos)
+    columns = ['accuracy' if col == 'acc' else col
+               for col in dataframe_lc.columns]
+    dataframe_lc.columns = columns
     axes = defaultdict(lambda: plt.figure().add_subplot(111))
     pyplot_attr = {
         'title': 'Performance on {} data set'.format(data_set.upper()),
@@ -158,4 +180,5 @@ def main():
 
 
 if __name__ == '__main__':
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     main()

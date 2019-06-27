@@ -1,14 +1,14 @@
 '''Run an multi agent experiment.'''
+import os
 import sys
 import json
 import shutil
 import logging
 import argparse
 from pathlib import Path
-from threading import Thread
 from functools import partial
-from tempfile import TemporaryDirectory
 
+import gym
 import pandas as pd
 import tensorflow as tf
 import stable_baselines.ddpg as ddpg
@@ -22,6 +22,7 @@ from custom_envs.utils.utils_logging import Monitor
 from custom_envs.utils.utils_venv import ThreadVecEnv
 from custom_envs.envs.multioptlrs import MultiOptLRs
 from custom_envs.envs.multioptimize import MultiOptimize
+from custom_envs.vectorize.optvecenv import OptVecEnv
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,10 +34,10 @@ def run_agent(envs, parameters):
     gamma = parameters['gamma']
     model_path = parameters['model_path']
     set_global_seeds(parameters.get('seed'))
-    dummy_env = ThreadVecEnv(envs)
+    dummy_env = OptVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
-                     learning_rate=learning_rate, verbose=1)
+                     learning_rate=learning_rate, verbose=1, nminibatches=1)
     elif alg == 'A2C':
         model = A2C(MlpPolicy, dummy_env, gamma=gamma,
                     learning_rate=learning_rate, verbose=1)
@@ -66,31 +67,26 @@ def run_experiment(parameters):
     task_name = '{alg}-{learning_rate:.4f}-{gamma:.4f}-{seed:d}'
     task_name = task_name.format(**parameters)
     save_to = Path(save_to, task_name)
-    with TemporaryDirectory() as tmpdir:
-        log_dir = Path(tmpdir, task_name)
-        log_dir.mkdir(parents=True)
+    with utils_file.create_directory(save_to, False, False) as log_dir:
         parameters['commit'] = utils_file.get_commit_hash(repository_path)
         utils_file.save_json(parameters, log_dir / 'hyperparams.json')
-        main_environment = MultiOptimize(**parameters.get('kwargs', {}))
-        main_environment.seed(parameters.get('seed'))
         parameters['model_path'] = str(log_dir / 'model.pkl')
         log_path = str(log_dir / 'monitor_{:d}')
-        main_environment = MultiEnvWrapper(main_environment)
-        env_callable = [partial(Monitor, subenv, log_path.format(i),
-                                allow_early_resets=True,
-                                info_keywords=('loss', 'accuracy'),
-                                chunk_size=10)
-                        for i, subenv in
-                        enumerate(main_environment.sub_environments.values())]
+        env_name = parameters['env_name']
+        kwargs = parameters.get('kwargs', {})
+        env_callable = [
+            partial(Monitor, gym.make(env_name, **kwargs),
+                    log_path.format(i), allow_early_resets=True,
+                    info_keywords=('loss', 'accuracy', 'actions_mean',
+                                   'weights_mean', 'actions_std',
+                                   'states_mean'),
+                    chunk_size=parameters.get('chunk_size', 5))
+            for i in range(1)
+        ]
         try:
-            taskrun = Thread(target=run_agent, args=[env_callable, parameters])
-            taskrun.start()
-            taskrun.join()
-            main_environment.join()
+            run_agent(env_callable, parameters)
         except RuntimeError as error:
             LOGGER.error('%s, %s', error, parameters)
-        finally:
-            shutil.make_archive(str(save_to), 'zip', str(log_dir))
     return parameters
 
 
@@ -108,13 +104,26 @@ def run_batch(commandline_args):
         run_experiment(parameters)
 
 
-def run_test(commandline_args):
+def run_test1(commandline_args):
     '''Test run the code.'''
     parameters = {"alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.9,
-                  "learning_rate": 0.001, "path": "results_iriss2", "seed": 0,
-                  "total_timesteps": 10**7,
-                  'kwargs': {'data_set': 'mnist', 'batch_size': 1024,
-                             'max_batches': 40, 'version': 1}}
+                  "learning_rate": 0.01, "path": "results_optimize", "seed": 0,
+                  "total_timesteps": 10**7, "chunk_size": 1,
+                  'kwargs': {'data_set': 'mnist', 'batch_size': 128,
+                             'max_batches': 100, 'version': 4,
+                             'max_history': 25}}
+    print(parameters)
+    run_experiment(parameters)
+
+
+def run_test(commandline_args):
+    '''Test run the code.'''
+    parameters = {"alg": "PPO", "env_name": "MultiOptLRs-v0", "gamma": 0.9,
+                  "learning_rate": 0.001, "path": "results_optlrs",
+                  "total_timesteps": 10**8, "chunk_size": 1, "seed": 0,
+                  'kwargs': {'data_set': 'mnist', 'batch_size': 512,
+                             'max_batches': 200, 'version': 4,
+                             'max_history': 5}}
     print(parameters)
     run_experiment(parameters)
 
@@ -138,6 +147,7 @@ def run_task(commandline_args):
 
 def main(commandline_args):
     '''Main script function.'''
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     parser = argparse.ArgumentParser()
     parser.add_argument("command", help="The command to run.",
                         choices=['batch', 'run', 'test'])
@@ -151,9 +161,8 @@ def main(commandline_args):
         run_test(commandline_args[1:])
 
 
-
 if __name__ == '__main__':
-    
+
     # single_task_csv()
     # single_task_json()
     # loop_over_json_file()

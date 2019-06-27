@@ -1,42 +1,59 @@
-
+'''A module containing a Model subclass implemented with keras.'''
 import numpy as np
 import numpy.random as npr
-import tensorflow.keras as keras
-import tensorflow.keras.layers as k_layers
+import tensorflow as tf
 
+import custom_envs.utils.utils_common as common
 from custom_envs.models.model import ModelBase
+
 
 class ModelKeras(ModelBase):
     '''
-    A model that uses a numpy backend.
+    A model that uses a keras backend.
     '''
-    def __init__(self, feature_size, num_of_labels, seed=None):
-        target = k_layers.Input((1,))
-        model = keras.Sequential()
-        model.add(k_layers.Dense(num_of_labels, input_shape=(feature_size,),
-                                 use_bias=False))
-        loss_function = keras.losses.CategoricalCrossentropy()
-        loss = loss_function(target, model.output)
-        grads = keras.backend.gradients(loss, model.weights)
-        get_grads = keras.backend.function((model.input, target), grads)
-        model.compile('sgd', loss_function, metrics=['acc'])
-        self.model = model
-        self.loss_function = keras.backend.function((model.input, target), loss)
-        self.grad_function = get_grads
 
-    def reset(self, np_random=npr):
+    def __init__(self, feature_size, num_of_labels, use_bias=False):
+        layers = (feature_size, num_of_labels)
+        target = tf.keras.layers.Input((1,))
+        model_in = tf.keras.layers.Input([layers[0]])
+        tensor = model_in
+        layers = [layers[0], 20, layers[-1]]
+        layer_activations = []
+        for layer in layers[1:-1]:
+            layer = tf.keras.layers.Dense(layer, use_bias=use_bias,
+                                           activation='relu')
+            tensor = layer(tensor)
+            layer_activations.extend([1]*sum(np.prod(w.shape) for w in layer.weights))
+        layer = tf.keras.layers.Dense(layers[-1], use_bias=use_bias,
+                                       activation='softmax')
+        tensor = layer(tensor)
+        layer_activations.extend([0]*sum(np.prod(w.shape) for w in layer.weights))
+        model = tf.keras.Model(inputs=model_in, outputs=tensor)
+        loss_function = tf.keras.losses.CategoricalCrossentropy()
+        loss = loss_function(target, tensor)
+        grads = tf.gradients(loss, model.weights)
+        get_grads = tf.keras.backend.function((model.input, target), grads)
+        get_loss = tf.keras.backend.function((model.input, target), loss)
+        model.compile('sgd', 'sparse_categorical_crossentropy', metrics=['acc'])
+        self._size = len(common.flatten_arrays(model.get_weights()))
+        self.shapes = tuple(w.shape for w in model.get_weights())
+        self.model = model
+        self.grad_function = get_grads
+        self.loss_function = get_loss
+        self.layer_activations = layer_activations
+
+    def reset(self):
         '''
         Reset the model's parameters with a normal distribution.
         '''
-        self.model.set_weights([np_random.normal(size=w.shape.as_list())
-                                for w in self.model.weights])
+        self.model.set_weights([npr.normal(size=shp) for shp in self.shapes])
 
     @property
     def size(self):
         '''
         Return the number of parameters in the model.
         '''
-        return sum([keras.backend.count_params(w) for w in self.model.weights])
+        return self._size
 
     @property
     def weights(self):
@@ -46,7 +63,7 @@ class ModelKeras(ModelBase):
         '''
         Forward pass of the model.
         '''
-        return self.model.predict(features, verbose=0)
+        return self.model.predict_on_batch(features)
 
     def compute_loss(self, features, labels):
         '''
@@ -60,14 +77,22 @@ class ModelKeras(ModelBase):
         Compute the gradients of all parameters in respect to the cost.
         '''
         labels = np.argmax(labels, axis=-1)
-        return self.grad_function((features, labels))[0]
+        #print(self.grad_function((features, labels)))
+        return common.flatten_arrays(self.grad_function((features, labels)))
 
-    def compute_accuracy(self, features, labels, acts=None):
+    def compute_accuracy(self, features, labels):
         '''
         Compute the accuracy.
         '''
+        predictions = np.argmax(self.model.predict_on_batch(features), axis=1)
         labels = np.argmax(labels, axis=-1)
-        return float(self.model.test_on_batch(features, labels)[1])
+        # print(self.model.predict_on_batch(features))
+        # print(predictions)
+        # print(labels)
+        #print(np.mean(predictions == labels))
+        #print(predictions.shape, labels.shape)
+        #return float(self.model.test_on_batch(features, labels)[1])
+        return np.mean(predictions == labels)
 
     def compute_backprop(self, features, labels):
         '''
@@ -82,13 +107,13 @@ class ModelKeras(ModelBase):
         '''
         Set the weights of the model.
         '''
-        self.model.set_weights([weights])
+        self.model.set_weights(common.from_flat(weights, self.shapes))
 
     def get_weights(self):
         '''
         Get the weights of the model.
         '''
-        return self.model.get_weights()[0]
+        return common.flatten_arrays(self.model.get_weights())
 
     def compute_accuracy_batch(self, features, labels, batch_size=32):
         '''Compute the accuracy using batches.'''
@@ -108,4 +133,7 @@ class ModelKeras(ModelBase):
         loss, accu = self.model.evaluate(features, labs, verbose=0,
                                          batch_size=batch_size)
         grad = self.compute_gradients_batch(features, labels, batch_size)
-        return float(loss), grad, float(accu)
+        return float(loss), common.flatten_arrays(grad), float(accu)
+
+    #def get_types(self):
+    #    return [np.full(shp, )]

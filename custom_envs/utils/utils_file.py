@@ -136,7 +136,7 @@ def create_directory(path, temporary=True, compress=True):
             else:
                 shutil.move(tmpdir, path)
     else:
-        path.mkdir()
+        path.mkdir(parents=True)
         yield path
         if compress:
             path = path if path.suffix else path.with_suffix('.zip')

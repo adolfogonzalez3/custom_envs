@@ -3,9 +3,10 @@ import lzma
 from pathlib import Path
 
 import numpy as np
+import tensorflow as tf
 
 from custom_envs.data.sequence import InMemorySequence
-from custom_envs.utils.utils_image import resize_array_many
+from custom_envs.utils.utils_image import resize_array_many, convert_many
 from custom_envs.utils.utils_common import to_onehot
 from custom_envs.utils.utils_math import normalize
 
@@ -93,6 +94,13 @@ def load_data(name='iris', batch_size=None, num_of_labels=None):
                               (len(labels), -1))
         features = normalize(features)
         labels, _ = to_onehot(labels, num_of_labels)
+    elif name == 'cifar-10':
+        (images_tr, labels_tr), _ = tf.keras.datasets.cifar10.load_data()
+        images_tr = convert_many(images_tr, mode='L')
+        images_tr = resize_array_many(images_tr, (7, 7))
+        features = np.reshape(images_tr, (len(labels_tr), -1))
+        features = normalize(features)
+        labels, _ = to_onehot(labels_tr)
     else:
         raise RuntimeError('No such data set named: {}'.format(name))
     sequence = InMemorySequence(features, labels, batch_size)
