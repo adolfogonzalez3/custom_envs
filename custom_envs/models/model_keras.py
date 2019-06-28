@@ -21,20 +21,24 @@ class ModelKeras(ModelBase):
         layer_activations = []
         for layer in layers[1:-1]:
             layer = tf.keras.layers.Dense(layer, use_bias=use_bias,
-                                           activation='relu')
+                                          activation='relu')
             tensor = layer(tensor)
-            layer_activations.extend([1]*sum(np.prod(w.shape) for w in layer.weights))
+            layer_activations.extend([1]*sum(np.prod(w.shape)
+                                             for w in layer.weights))
         layer = tf.keras.layers.Dense(layers[-1], use_bias=use_bias,
-                                       activation='softmax')
+                                      activation='softmax')
         tensor = layer(tensor)
-        layer_activations.extend([0]*sum(np.prod(w.shape) for w in layer.weights))
+        layer_activations.extend([0]*sum(np.prod(w.shape)
+                                         for w in layer.weights))
         model = tf.keras.Model(inputs=model_in, outputs=tensor)
         loss_function = tf.keras.losses.CategoricalCrossentropy()
-        loss = loss_function(target, tensor)
+        norm = [tf.keras.regularizers.l2()(layer) for layer in model.weights]
+        loss = loss_function(target, tensor) + 1e-2 * tf.add_n(norm)
         grads = tf.gradients(loss, model.weights)
         get_grads = tf.keras.backend.function((model.input, target), grads)
         get_loss = tf.keras.backend.function((model.input, target), loss)
-        model.compile('sgd', 'sparse_categorical_crossentropy', metrics=['acc'])
+        model.compile('sgd', 'sparse_categorical_crossentropy',
+                      metrics=['acc'])
         self._size = len(common.flatten_arrays(model.get_weights()))
         self.shapes = tuple(w.shape for w in model.get_weights())
         self.model = model
@@ -70,7 +74,7 @@ class ModelKeras(ModelBase):
         Compute the loss given the features and labels.
         '''
         labels = np.argmax(labels, axis=-1)
-        return float(self.model.test_on_batch(features, labels)[0])
+        return float(self.loss_function((features, labels)))
 
     def compute_gradients(self, features, labels):
         '''
@@ -86,12 +90,6 @@ class ModelKeras(ModelBase):
         '''
         predictions = np.argmax(self.model.predict_on_batch(features), axis=1)
         labels = np.argmax(labels, axis=-1)
-        # print(self.model.predict_on_batch(features))
-        # print(predictions)
-        # print(labels)
-        #print(np.mean(predictions == labels))
-        #print(predictions.shape, labels.shape)
-        #return float(self.model.test_on_batch(features, labels)[1])
         return np.mean(predictions == labels)
 
     def compute_backprop(self, features, labels):
@@ -135,5 +133,5 @@ class ModelKeras(ModelBase):
         grad = self.compute_gradients_batch(features, labels, batch_size)
         return float(loss), common.flatten_arrays(grad), float(accu)
 
-    #def get_types(self):
+    # def get_types(self):
     #    return [np.full(shp, )]
