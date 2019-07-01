@@ -12,7 +12,7 @@ import gym
 import pandas as pd
 import tensorflow as tf
 import stable_baselines.ddpg as ddpg
-from stable_baselines.common.policies import MlpPolicy
+from stable_baselines.common.policies import MlpPolicy, MlpLstmPolicy
 from stable_baselines import PPO2, A2C, DDPG
 from stable_baselines.common.misc_util import set_global_seeds
 
@@ -37,7 +37,8 @@ def run_agent(envs, parameters):
     dummy_env = OptVecEnv(envs)
     if alg == 'PPO':
         model = PPO2(MlpPolicy, dummy_env, gamma=gamma,
-                     learning_rate=learning_rate, verbose=1, nminibatches=1)
+                     learning_rate=learning_rate, verbose=1,
+                     nminibatches=dummy_env.num_envs)
     elif alg == 'A2C':
         model = A2C(MlpPolicy, dummy_env, gamma=gamma,
                     learning_rate=learning_rate, verbose=1)
@@ -73,14 +74,14 @@ def run_experiment(parameters):
         parameters['model_path'] = str(log_dir / 'model.pkl')
         log_path = str(log_dir / 'monitor_{:d}')
         env_name = parameters['env_name']
-        kwargs = parameters.get('kwargs', {})
+        kwargs = parameters.setdefault('kwargs', {})
         env_callable = [
             partial(Monitor, gym.make(env_name, **kwargs),
                     log_path.format(i), allow_early_resets=True,
                     info_keywords=('loss', 'accuracy', 'actions_mean',
                                    'weights_mean', 'actions_std',
                                    'states_mean'),
-                    chunk_size=parameters.get('chunk_size', 5))
+                    chunk_size=parameters.setdefault('chunk_size', 5))
             for i in range(1)
         ]
         try:
@@ -106,24 +107,30 @@ def run_batch(commandline_args):
 
 def run_test1(commandline_args):
     '''Test run the code.'''
-    parameters = {"alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.9,
-                  "learning_rate": 0.01, "path": "results_optimize", "seed": 0,
-                  "total_timesteps": 10**7, "chunk_size": 1,
-                  'kwargs': {'data_set': 'mnist', 'batch_size': 128,
-                             'max_batches': 100, 'version': 4,
-                             'max_history': 25}}
+    parameters = {
+        "alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.9,
+        "learning_rate": 0.01,
+        "path": "results_optimize",
+        "total_timesteps": 5*10**7, "chunk_size": 10, "seed": 0,
+        'kwargs': {'data_set': 'mnist', 'batch_size': 128,
+                   'max_batches': 100, 'version': 1,
+                   'max_history': 25}
+    }
     print(parameters)
     run_experiment(parameters)
 
 
 def run_test(commandline_args):
     '''Test run the code.'''
-    parameters = {"alg": "PPO", "env_name": "MultiOptLRs-v0", "gamma": 0.9,
-                  "learning_rate": 0.001, "path": "results_optlrs",
-                  "total_timesteps": 10**8, "chunk_size": 1, "seed": 0,
-                  'kwargs': {'data_set': 'mnist', 'batch_size': 512,
-                             'max_batches': 200, 'version': 4,
-                             'max_history': 5}}
+    parameters = {
+        "alg": "PPO", "env_name": "MultiOptLRs-v0", "gamma": 0.9,
+        "learning_rate": 0.01, "chunk_size": 10, "seed": 0,
+        "path": "results_optlrs",
+        "total_timesteps": 5*10**7,
+        'kwargs': {'data_set': 'mnist', 'batch_size': 128,
+                   'max_batches': 100, 'version': 1,
+                   'max_history': 25}
+    }
     print(parameters)
     run_experiment(parameters)
 

@@ -1,5 +1,7 @@
 """The Optimize environment."""
 
+from collections import namedtuple
+
 import numpy as np
 from gym.spaces import Box, Dict, Discrete
 
@@ -8,6 +10,9 @@ from custom_envs import load_data
 from custom_envs.models import ModelKeras as Model
 from custom_envs.envs import BaseMultiEnvironment
 from custom_envs.utils.utils_common import History, enzip
+
+VersionType = namedtuple('VersionType', ['history', 'observation', 'action',
+                                         'reward'])
 
 
 class MultiOptLRs(BaseMultiEnvironment):
@@ -31,14 +36,14 @@ class MultiOptLRs(BaseMultiEnvironment):
                        the target network's parameters.
     """
 
-    def __init__(self, data_set='iris', batch_size=None, version=1,
-                 max_batches=400, max_history=5):
+    def __init__(self, data_set='iris', batch_size=None, max_batches=400,
+                 max_history=5, version=1, observation_version=0,
+                 action_version=0, reward_version=0):
         super().__init__()
         self.sequence = load_data(data_set, batch_size)
         num_of_labels = self.sequence.label_shape[0]
         feature_size = self.sequence.feature_shape[0]
         self.model = Model(feature_size, num_of_labels, use_bias=True)
-        #self.model = Model((feature_size, num_of_labels), use_bias=True)
         model_shape = self.model.weights.shape
         self.history = History(5, losses=(), gradients=model_shape,
                                weights=model_shape)
@@ -60,36 +65,38 @@ class MultiOptLRs(BaseMultiEnvironment):
         elif version == 4:
             self.adjusted_history = History(max_history, gradients=model_shape)
             state_size = max_history
+
+        if action_version == 0:
+            action_low = -3.
+            action_high = 1.
+        elif action_version == 1:
+            action_low = 0.
+            action_high = 1e4
+
         self.observation_space = Dict({MultiOptLRs.AGENT_FMT.format(i):
                                        Box(low=-1e6, high=1e6,
                                            dtype=np.float32,
                                            shape=(state_size,))
                                        for i in range(self.model.size)})
         self.action_space = Dict({MultiOptLRs.AGENT_FMT.format(i):
-                                  Box(low=-0., high=10000.,
+                                  Box(low=action_low, high=action_high,
                                       dtype=np.float32,
                                       shape=(1,))
                                   for i in range(self.model.size)})
         self.seed()
         self.max_history = max_history
         self.max_batches = max_batches
-        self.version = version
+        self.version = VersionType(version, observation_version, action_version,
+                                   reward_version)
         self.running_rate = np.ones(model_shape)
 
     def base_reset(self):
+        self.reward = 0
         self.adjusted_history.reset()
         self.model.reset()
         model_shape = self.model.weights.shape
         self.running_rate = np.ones(model_shape)
-        if True:
-            seq_idx = len(self.sequence) - 1
-            features, labels = self.sequence[seq_idx]
-            loss, grad, _ = self.model.compute_backprop(features, labels)
-            #grad = grad / len(features)
-            self.history.reset(losses=loss, gradients=grad,
-                               weights=self.model.weights)
-        else:
-            self.history.reset()
+        self.history.reset()
         states = self.adjusted_history.build_multistate()
         states = {MultiOptLRs.AGENT_FMT.format(i): list(v)
                   for i, v, a in enzip(states, self.model.layer_activations)}
@@ -98,75 +105,75 @@ class MultiOptLRs(BaseMultiEnvironment):
     def base_step(self, action):
         action = np.reshape([action[MultiOptLRs.AGENT_FMT.format(i)].ravel()
                              for i in range(self.model.size)], (-1,))
-        #action = 10**action
         seq_idx = self.current_step % len(self.sequence)
         if seq_idx == 0:
             self.sequence.shuffle()
         features, labels = self.sequence[seq_idx]
 
         loss, grad, accu = self.model.compute_backprop(features, labels)
-        #new_weights = self.model.weights - grad*self.running_rate
-        #new_weights = self.model.weights - grad*10**(action)
-        new_weights = self.model.weights - grad*(action*1e-3)
+        if self.version.action == 0:
+            action = 10**action
+        elif self.version.action == 1:
+            action = action*1e-3
+        new_weights = self.model.weights - grad*action
+
         self.model.set_weights(new_weights)
         loss, grad, accu = self.model.compute_backprop(features, labels)
 
-        #grad = grad / len(features)
-        self.history.append(losses=loss, gradients=grad,
-                            weights=new_weights)
+        self.history.append(losses=loss, gradients=grad, weights=new_weights)
         past_losses = self.history['losses']
         past_grads = self.history['gradients']
         past_weights = self.history['weights']
 
-        if self.current_step < 3:
-            adjusted_loss = 1
-            adjusted_wght = 1
-            adjusted_grad = np.ones_like(grad)
-        else:
-            prev_loss = np.abs(past_losses[1] - past_losses[2])
-            adjusted_loss = np.divide(past_losses[0] - past_losses[1],
-                                      prev_loss + 1e-8)
-            prev_wght = np.abs(past_weights[1] - past_weights[2])
-            abs_wght = np.abs(past_weights[0] - past_weights[1])
-            adjusted_wght = np.divide(prev_wght, abs_wght + 1e-8)
-            prev_grad = np.abs(past_grads[1] - past_grads[2])
-            adjusted_grad = np.divide(past_grads[0] - past_grads[1],
-                                      prev_grad + 1e-8)
-        # adjusted_loss = np.divide(past_losses[0] - past_losses[1],
-        #                          np.abs(past_losses[1]) + 1e-1)
-        adjusted_loss = np.divide(past_losses[0],
-                                  np.abs(past_losses[1]) + 1e-1)
-        #adjusted_loss += np.mean(np.abs(new_weights))*1e-2
-        adjusted_grad = np.divide(past_grads[0], np.abs(past_grads[1]) + 1e-3)
-        #adjusted_grad = grad * 1e3
-        if self.version == 0 or self.version == 4:
+        prev_grad = np.abs(past_grads[1] - past_grads[2])
+        adjusted_grad = np.divide(past_grads[0] - past_grads[1],
+                                  prev_grad + 1e-8)
+        adjusted_loss = past_losses[0] / (np.abs(past_losses[1]) + 1e0)
+        if self.version.observation == 0:
+            adjusted_grad = past_grads[0] / (np.abs(past_grads[1]) + 1e-3)
+        elif self.version.observation == 1:
+            adjusted_grad = grad * 1e2
+        elif self.version.observation == 2:
+            if self.current_step < 3:
+                adjusted_loss = 1
+                adjusted_wght = 1
+                adjusted_grad = np.ones_like(grad)
+            else:
+                prev_loss = np.abs(past_losses[1] - past_losses[2])
+                adjusted_loss = np.divide(past_losses[0] - past_losses[1],
+                                          prev_loss + 1e-3)
+                prev_wght = np.abs(past_weights[1] - past_weights[2])
+                abs_wght = np.abs(past_weights[0] - past_weights[1])
+                adjusted_wght = np.divide(prev_wght, abs_wght + 1e-8)
+                prev_grad = np.abs(past_grads[1] - past_grads[2])
+                adjusted_grad = np.divide(past_grads[0] - past_grads[1],
+                                          prev_grad + 1e-8)
+
+        if self.version.history == 0 or self.version.history == 4:
             self.adjusted_history.append(gradients=adjusted_grad)
-        elif self.version == 1:
+        elif self.version.history == 1:
             self.adjusted_history.append(losses=adjusted_loss,
                                          gradients=adjusted_grad)
-        elif self.version == 2 or self.version == 3:
+        elif self.version.history == 2 or self.version.history == 3:
             self.adjusted_history.append(weights=adjusted_wght,
                                          losses=adjusted_loss,
                                          gradients=adjusted_grad)
         state = self.adjusted_history.build_multistate()
         states = {MultiOptLRs.AGENT_FMT.format(i): list(v)
                   for i, v, a in enzip(state, self.model.layer_activations)}
-        #features = self.sequence.features
-        #labels = self.sequence.labels
-        #loss = self.model.compute_loss(features, labels)
-        reward = float(1 / loss)
+        self.reward -= float(adjusted_loss)
+        if self.version.reward == 0:
+            reward = -float(adjusted_loss)
+        elif self.version.reward == 1:
+            reward = float(1 / loss)
         terminal = self._terminal()
-
-        if np.all(grad == 0):
-            terminal = True
-            reward -= 10
-            #reward = reward*(self.max_batches - self.current_step)
 
         accu = None
         if seq_idx == 0 or terminal:
             features = self.sequence.features
             labels = self.sequence.labels
             accu = self.model.compute_accuracy(features, labels)
+            loss = self.model.compute_loss(features, labels)
 
         info = {
             'loss': loss, 'accuracy': accu,
