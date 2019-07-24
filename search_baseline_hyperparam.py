@@ -111,7 +111,7 @@ def main():
     parser.add_argument("--data_set", help="The data set to trial against.",
                         type=str, default='iris')
     args = parser.parse_args()
-    parameters = vars(args)
+    parameters = vars(args).copy()
     del parameters['trials']
     path = Path(parameters['path'])
     if not path.exists():
@@ -130,16 +130,6 @@ def main():
                                 load_if_exists=True,
                                 pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials=args.trials)
-    # print(study.best_trial.number)
-    #dataframe = study.trials_dataframe()
-    # print(dataframe)
-    # print(dataframe.columns)
-    # print(dataframe['number'])
-    # print(dataframe.loc[('number',)])
-    # print(dataframe.columns)
-    #dataframe = dataframe[dataframe['params']['batch_size'] == 32]
-    # print(dataframe)
-    # print(dataframe['intermediate_values'])
 
 
 if __name__ == '__main__':

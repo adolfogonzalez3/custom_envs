@@ -104,7 +104,7 @@ def main():
     parser.add_argument('--trials', help="The number of trials to run.",
                         default=10, type=int)
     args = parser.parse_args()
-    parameters = vars(args)
+    parameters = vars(args).copy()
     del parameters['trials']
     path = Path(parameters['path'])
     if not path.exists():
