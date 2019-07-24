@@ -8,6 +8,7 @@ from custom_envs.envs import SINGLE_AGENT_ENVIRONMENTS
 def test_step(environment_class):
     '''Tests environment's step method.'''
     environ = environment_class()
+    environ.reset()
     action = environ.action_space.sample()
     state, reward, terminal, info = environ.step(action)
     assert environ.observation_space.contains(state)

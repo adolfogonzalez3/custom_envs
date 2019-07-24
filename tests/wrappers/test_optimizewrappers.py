@@ -45,11 +45,11 @@ def test_historywrapper_spaces():
     '''Test HistoryWrapper's spaces.'''
     max_history = 5
     env = StubEnv()
-    obs_space_old = env.observation_space
+    obs_space_old = env.observation_space.spaces
     action_space_old = env.action_space
     env = wrappers.HistoryWrapper(env, max_history)
-    assert obs_space_old.spaces.keys() == env.observation_space.spaces.keys()
-    for name, space in obs_space_old.spaces.items():
+    assert obs_space_old.keys() == env.observation_space.spaces.keys()
+    for name, space in obs_space_old.items():
         assert np.all(env.observation_space[name].low == space.low)
         assert np.all(env.observation_space[name].high == space.high)
         assert env.observation_space[name].shape == (max_history, *space.shape)

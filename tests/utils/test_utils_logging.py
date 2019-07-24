@@ -116,11 +116,7 @@ def test_monitor_reset(save_path, env_obj):
     '''Tests monitor's reset method.'''
     save_file = Path(save_path) / 'test_reset'
     monitor = utils.Monitor(env_obj, save_file)
-    with pytest.raises(RuntimeError):
-        monitor.step(None)
-    monitor.reset()
-    with pytest.raises(RuntimeError):
-        monitor.reset()
+    assert monitor.observation_space.contains(monitor.reset())
 
 
 def test_monitor_step(save_path, env_obj):
@@ -139,5 +135,3 @@ def test_monitor_step(save_path, env_obj):
     assert terminal
     assert 'half' in info
     assert save_file.with_suffix(utils.Monitor.EXT).is_file()
-    with pytest.raises(RuntimeError):
-        monitor.step(None)

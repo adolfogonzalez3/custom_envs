@@ -5,7 +5,7 @@ import numpy.random as npr
 
 from custom_envs.models import ModelNumpy, ModelKeras, ModelTF
 
-MODELS = [ModelNumpy, ModelKeras, ModelTF]
+MODELS = (ModelNumpy, ModelKeras)
 
 
 @pytest.mark.parametrize("Model", MODELS)
@@ -37,7 +37,7 @@ def test_compute_gradients_shape(Model):
     features = np.ones((32, 4))
     labels = npr.randint(3, size=(32, 3))
     grad = model.compute_gradients(features, labels)
-    assert grad.shape == (4, 3)
+    assert grad.shape == (12,)
 
 
 @pytest.mark.parametrize("Model", MODELS)
@@ -57,7 +57,7 @@ def test_compute_backprop_type_bound_shape(Model):
     labels = npr.randint(3, size=(32, 3))
     loss, grad, acc = model.compute_backprop(features, labels)
     assert isinstance(loss, float)
-    assert grad.shape == (4, 3)
+    assert grad.shape == (12,)
     assert isinstance(acc, float)
     assert 0 <= acc <= 1
 
@@ -87,7 +87,7 @@ def test_compute_gradients_batch_shape(Model):
     features = np.ones((256, 4))
     labels = npr.randint(3, size=(256, 3))
     grads = model.compute_gradients_batch(features, labels, batch_size=32)
-    assert grads.shape == (4, 3)
+    assert grads.shape == (12,)
 
 
 @pytest.mark.parametrize("Model", MODELS)
@@ -97,6 +97,22 @@ def test_compute_backprop_batch_type_bound_shape(Model):
     labels = npr.randint(3, size=(256, 3))
     loss, grad, acc = model.compute_backprop_batch(features, labels)
     assert isinstance(loss, float)
-    assert grad.shape == (4, 3)
+    assert grad.shape == (12,)
     assert isinstance(acc, float)
     assert 0 <= acc <= 1
+
+
+@pytest.mark.parametrize("Model", MODELS)
+def test_get_weights(Model):
+    model = Model(4, 3)
+    weights = model.get_weights()
+    assert weights.shape == (12,)
+
+
+@pytest.mark.parametrize("Model", MODELS)
+def test_set_weights(Model):
+    model = Model(4, 3)
+    weights = npr.rand(12)
+    model.set_weights(weights)
+    model_weights = model.get_weights()
+    assert np.all(np.isclose(weights, model_weights))
