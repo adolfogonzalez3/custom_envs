@@ -17,7 +17,8 @@ setup(name='custom_envs',
           'pandas',
           'matplotlib',
           'tqdm',
-          'pillow'
+          'pillow',
+          'optuna'
       ],
       extras_require={
 
