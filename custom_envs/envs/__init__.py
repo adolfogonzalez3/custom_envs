@@ -8,5 +8,4 @@ from custom_envs.envs.optimizecorrect import OptimizeCorrect
 from custom_envs.envs.multioptimize import MultiOptimize
 from custom_envs.envs.multioptlrs import MultiOptLRs
 
-SINGLE_AGENT_ENVIRONMENTS = (Optimize, OptimizeCorrect, MultiOptimize,
-                             MultiOptLRs)
+SINGLE_AGENT_ENVIRONMENTS = (MultiOptimize, MultiOptLRs)

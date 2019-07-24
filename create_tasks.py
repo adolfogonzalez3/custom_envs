@@ -31,7 +31,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('file_name')
     parser.add_argument('--type', choices=['json', 'csv', 'sqlite3'],
-                        default='csv')
+                        default='json')
 
     args = parser.parse_args()
     if args.type == 'sqlite3':
@@ -54,7 +54,7 @@ def main():
     dataframe['env_name'] = 'MultiOptimize-v0'
     dataframe['path'] = 'results_mnist_multioptimize'
     kwargs = {'data_set': 'iris', 'batch_size': 32}
-    dataframe['kwargs'] = json.dumps(kwargs)
+    dataframe['kwargs:json'] = json.dumps(kwargs)
 
     if args.type == 'json':
         dataframe.to_json(file_name, orient='records', lines=True)

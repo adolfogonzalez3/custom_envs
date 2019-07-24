@@ -1,3 +1,4 @@
+'''A script to plot data from dataframes.'''
 import argparse
 from pathlib import Path
 from collections import defaultdict
@@ -6,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import custom_envs.utils.utils_plot as utils_plot
+
 
 def plot_results(axes, dataframe, groupby, label=None):
     '''Plot results on multiple axes given a dataframe.'''
@@ -18,6 +20,7 @@ def plot_results(axes, dataframe, groupby, label=None):
         utils_plot.plot_sequence(axes[name], mean_df[name], label=label)
         utils_plot.fill_between(axes[name], mean_df[name], std_df[name],
                                 alpha=0.1, label=label)
+
 
 def main():
     '''Evaluate a trained model against logistic regression.'''
@@ -34,6 +37,7 @@ def main():
         'title': 'Performance on {} data set',
         'xlabel': 'Epoch',
     }
+    dataframe = dataframe.fillna(method='bfill')
     if args.rolling != 0:
         dataframe = dataframe.rolling(args.rolling).mean()
     for name in columns:

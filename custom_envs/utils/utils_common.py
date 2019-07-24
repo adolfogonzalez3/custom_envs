@@ -138,8 +138,25 @@ class History(Mapping):
     def __len__(self):
         return len(self.history)
 
+    def reset_with_value(self, value):
+        '''
+        Reset the history to value.
+
+        :param value: (float) A value to reset all values in history to.
+        '''
+        self.history = {key: deque([np.full(shape, value)]*self.max_history,
+                                   maxlen=self.max_history)
+                        for key, shape in self.shapes.items()}
+        self.iteration = 0
+
     def reset(self, **named_items):
-        '''Reset the history.'''
+        '''
+        Reset the history.
+        
+        :named_items: (dict) If given then must be all contain all keys in
+                             history. If this is true then will set all values
+                             in history to named_items.
+        '''
         if named_items:
             assert self.keys() == named_items.keys()
             for name, item in named_items.items():
@@ -167,8 +184,7 @@ class History(Mapping):
     def build_multistate(self):
         '''Build the state for multiple agents.'''
         shape = (self.max_history, -1)
-        states = [self[key].reshape(shape).tolist()
-                  for key in self]
+        states = [self[key].reshape(shape).tolist() for key in self]
         states = list(chain.from_iterable(states))
         states = [cycle(state) if len(state) == 1 else state
                   for state in states]

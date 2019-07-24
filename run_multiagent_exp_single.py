@@ -80,7 +80,7 @@ def run_experiment(parameters):
                     log_path.format(i), allow_early_resets=True,
                     info_keywords=('loss', 'accuracy', 'actions_mean',
                                    'weights_mean', 'actions_std',
-                                   'states_mean'),
+                                   'states_mean', 'grads_mean'),
                     chunk_size=parameters.setdefault('chunk_size', 5))
             for i in range(1)
         ]
@@ -110,11 +110,12 @@ def run_test1(commandline_args):
     parameters = {
         "alg": "PPO", "env_name": "MultiOptimize-v0", "gamma": 0.9,
         "learning_rate": 0.01,
-        "path": "results_optimize",
+        "path": "results_optimize_LC_mnist",
         "total_timesteps": 5*10**7, "chunk_size": 10, "seed": 0,
-        'kwargs': {'data_set': 'mnist', 'batch_size': 128,
-                   'max_batches': 100, 'version': 1,
-                   'max_history': 25}
+        'kwargs': {'data_set': 'iris', 'batch_size': 32,
+                   'max_batches': 40, 'version': 1,
+                   'max_history': 25, "observation_version": 3,
+                   'reward_version': 1}
     }
     print(parameters)
     run_experiment(parameters)
@@ -125,11 +126,11 @@ def run_test(commandline_args):
     parameters = {
         "alg": "PPO", "env_name": "MultiOptLRs-v0", "gamma": 0.9,
         "learning_rate": 0.01, "chunk_size": 10, "seed": 0,
-        "path": "results_optlrs",
+        "path": "results_optlrs_LC_mnist",
         "total_timesteps": 5*10**7,
-        'kwargs': {'data_set': 'mnist', 'batch_size': 128,
+        'kwargs': {'data_set': 'mnist', 'c': 128,
                    'max_batches': 100, 'version': 1,
-                   'max_history': 25}
+                   'max_history': 25, "observation_version": 3}
     }
     print(parameters)
     run_experiment(parameters)

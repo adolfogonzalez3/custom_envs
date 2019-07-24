@@ -17,7 +17,7 @@ class ModelKeras(ModelBase):
         target = tf.keras.layers.Input((1,))
         model_in = tf.keras.layers.Input([layers[0]])
         tensor = model_in
-        #layers = [layers[0], 20, layers[-1]]
+        layers = [layers[0], layers[-1]]
         layer_activations = []
         for layer in layers[1:-1]:
             layer = tf.keras.layers.Dense(layer, use_bias=use_bias,
@@ -32,7 +32,6 @@ class ModelKeras(ModelBase):
                                          for w in layer.weights))
         model = tf.keras.Model(inputs=model_in, outputs=tensor)
         loss_function = tf.keras.losses.CategoricalCrossentropy()
-        norm = [tf.keras.regularizers.l2()(layer) for layer in model.weights]
         loss = loss_function(target, tensor)
         grads = tf.gradients(loss, model.weights)
         get_grads = tf.keras.backend.function((model.input, target), grads)
@@ -50,7 +49,9 @@ class ModelKeras(ModelBase):
         '''
         Reset the model's parameters with a normal distribution.
         '''
-        self.model.set_weights([npr.normal(size=shp) for shp in self.shapes])
+        self.model.set_weights([npr.normal(scale=np.sqrt(2 / np.sum(shp)),
+                                           size=shp)
+                                for shp in self.shapes])
 
     @property
     def size(self):

@@ -2,6 +2,7 @@
 A module for logging utilities and classes.
 """
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import gym
@@ -17,8 +18,8 @@ class Monitor(Wrapper):
     EXT = ".mon.csv"
     file_handler = None
 
-    def __init__(self, env, file_path, allow_early_resets=False,
-                 reset_keywords=(), info_keywords=(), chunk_size=1):
+    def __init__(self, env, file_path, info_keywords=(), chunk_size=1,
+                 callbacks=None):
         """
         A monitor wrapper for Gym environments, it is used to know the episode
         reward, length, time and other data.
@@ -30,8 +31,8 @@ class Monitor(Wrapper):
                                           before it is done
         :param reset_keywords: (tuple) extra keywords for the reset call, if
                                        extra parameters are needed at reset
-        :param info_keywords: (tuple) extra information to log, from the
-                                      information return of environment.step
+        :param callback: (callable) Called every step and fed the current
+                                    state, reward, done, and info.
         """
         Wrapper.__init__(self, env=env)
         self.t_start = time.time()
@@ -41,18 +42,12 @@ class Monitor(Wrapper):
             self.file_path = None
         self.chunk_size = chunk_size
 
-        self.reset_keywords = reset_keywords
         self.info_keywords = info_keywords
-        self.allow_early_resets = allow_early_resets
+        self.last_info = {}
         self.rewards = None
-        self.needs_reset = True
-        self.episode_rewards = []
-        self.episode_lengths = []
-        self.episode_times = []
-        self.total_steps = 0
-        # extra info about the current episode, that was passed in during
-        # reset()
-        self.current_reset_info = {}
+        self.metric_history = defaultdict(list)
+        self.current_episode = 0
+        self.callbacks = [] if callbacks is None else callbacks
         self.data = []
 
     def save(self):
@@ -77,19 +72,8 @@ class Monitor(Wrapper):
                        defined by reset_keywords
         :return: ([int] or [float]) the first observation of the environment
         """
-        if not self.allow_early_resets and not self.needs_reset:
-            raise RuntimeError("Tried to reset an environment before done. If "
-                               "you want to allow early resets, "
-                               "wrap your env with Monitor(env, path, "
-                               "allow_early_resets=True)")
         self.rewards = []
-        self.needs_reset = False
-        for key in self.reset_keywords:
-            value = kwargs.get(key)
-            if value is None:
-                raise ValueError(
-                    'Expected you to pass kwarg %s into reset' % key)
-            self.current_reset_info[key] = value
+        self.current_episode += 1
         return self.env.reset(**kwargs)
 
     def step(self, action):
@@ -100,27 +84,31 @@ class Monitor(Wrapper):
         :return: ([int] or [float], [float], [bool], dict) observation, reward,
                                                            done, information
         """
-        if self.needs_reset:
-            raise RuntimeError("Tried to step environment that needs reset")
         observation, reward, done, info = self.env.step(action)
+        for callback in self.callbacks:
+            callback({
+                'observation': observation, 'reward': reward,
+                'done': done, 'info': info, 'episode': self.current_episode
+            })
         self.rewards.append(reward)
         if done:
-            self.needs_reset = True
             ep_rew = sum(self.rewards)
             eplen = len(self.rewards)
-            ep_info = {"r": round(ep_rew, 6), "l": eplen,
-                       "t": round(time.time() - self.t_start, 6)}
+            ep_info = {
+                "r": round(ep_rew, 6), "l": eplen,
+                "t": round(time.time() - self.t_start, 6),
+                'current_reward': reward, 'episode': self.current_episode
+            }
+            self.last_info = info
             for key in self.info_keywords:
                 ep_info[key] = info[key]
-            self.episode_rewards.append(ep_rew)
-            self.episode_lengths.append(eplen)
-            self.episode_times.append(time.time() - self.t_start)
-            ep_info.update(self.current_reset_info)
             self.data.append(ep_info)
             if len(self.data) >= self.chunk_size:
                 self.save()
             info['episode'] = ep_info
-        self.total_steps += 1
+            self.metric_history['rewards'].append(ep_rew)
+            self.metric_history['lengths'].append(eplen)
+            self.metric_history['times'].append(time.time() - self.t_start)
         return observation, reward, done, info
 
     def close(self):
@@ -145,7 +133,7 @@ class Monitor(Wrapper):
 
         :return: ([float])
         """
-        return self.episode_rewards
+        return self.metric_history.get('rewards', [])
 
     def get_episode_lengths(self):
         """
@@ -153,7 +141,7 @@ class Monitor(Wrapper):
 
         :return: ([int])
         """
-        return self.episode_lengths
+        return self.metric_history.get('lengths', [])
 
     def get_episode_times(self):
         """
@@ -161,7 +149,7 @@ class Monitor(Wrapper):
 
         :return: ([float])
         """
-        return self.episode_times
+        return self.metric_history.get('rewards', [])
 
 
 def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
@@ -177,8 +165,7 @@ def create_env(env_name, log_dir=None, num_of_envs=1, **kwarg):
     envs = [gym.make(env_name, **kwarg) for _ in range(num_of_envs)]
     if log_dir is not None:
         log_dir = Path(log_dir)
-        envs = [Monitor(env, str(log_dir / str(i)), allow_early_resets=True,
-                        info_keywords=('objective', 'accuracy'),
-                        chunk_size=10)
+        envs = [Monitor(env, str(log_dir / str(i)), chunk_size=10,
+                        info_keywords=('objective', 'accuracy'))
                 for i, env in enumerate(envs)]
     return envs

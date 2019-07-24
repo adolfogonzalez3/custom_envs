@@ -2,7 +2,6 @@
 import argparse
 import os
 from math import ceil
-from threading import Thread
 from pathlib import Path
 from functools import partial
 from itertools import chain
@@ -71,7 +70,7 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
     vec_env = OptVecEnv([env])
     if alg == 'PPO':
         with open(save_path, 'rb') as pkl:
-            model = PPO2.load(pkl)#, env=vec_env)
+            model = PPO2.load(pkl)  # , env=vec_env)
     elif alg == 'A2C':
         with open(save_path, 'rb') as pkl:
             model = A2C.load(pkl, env=vec_env)
@@ -82,7 +81,7 @@ def task(path, seed, batch_size=None, total_epochs=40, data_set='mnist'):
     cumulative_reward = 0
     for epoch_no in trange(total_epochs, leave=False):
         for step in trange(steps_per_epoch, leave=False):
-            actions = model.predict(states, deterministic=True)[0]
+            actions = model.predict(states, deterministic=False)[0]
             states, rewards, _, infos = vec_env.step(actions)
             cumulative_reward = cumulative_reward + rewards[0]
             info = infos[0]
@@ -101,11 +100,28 @@ def task_lr(seed, batch_size=None, total_epochs=40, data_set='mnist'):
     labels = sequence.labels
     batch_size = len(features) if batch_size is None else batch_size
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(labels.shape[-1],
-                                    input_shape=features.shape[1:],
-                                    activation='softmax',
-                                    use_bias=True))
-    model.compile(tf.train.GradientDescentOptimizer(1e-1),
+    model.add(tf.keras.layers.Dense(
+        48, input_shape=features.shape[1:],
+        kernel_initializer=tf.keras.initializers.glorot_normal(seed=seed),
+        bias_initializer=tf.keras.initializers.glorot_normal(seed=seed),
+        activation='relu', use_bias=True
+    ))
+    model.add(tf.keras.layers.Dense(
+        48,
+        kernel_initializer=tf.keras.initializers.glorot_normal(seed=seed),
+        bias_initializer=tf.keras.initializers.glorot_normal(seed=seed),
+        activation='relu', use_bias=True
+    ))
+    model.add(tf.keras.layers.Dense(
+        labels.shape[-1],
+        kernel_initializer=tf.keras.initializers.glorot_normal(seed=seed),
+        bias_initializer=tf.keras.initializers.glorot_normal(seed=seed),
+        activation='softmax')
+    )
+    # model.compile(tf.train.GradientDescentOptimizer(1e-1),
+    #              loss='categorical_crossentropy',
+    #              metrics=['accuracy'])
+    model.compile(tf.train.AdamOptimizer(1e-2),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     callback = CustomCallback()
@@ -160,6 +176,35 @@ def run_multi(path, trials=10, batch_size=None, total_epochs=40,
     plt.show()
 
 
+def run_lr(path, trials=10, batch_size=None, total_epochs=40,
+           data_set='mnist'):
+    '''Run both agent evaluationg and logistic classification training.'''
+    path = Path(path)
+    infos = list(chain.from_iterable([task_lr(i, batch_size=batch_size,
+                                              total_epochs=total_epochs,
+                                              data_set=data_set)
+                                      for i in trange(trials)]))
+    dataframe_lc = pd.DataFrame.from_dict(infos)
+    columns = ['accuracy' if col == 'acc' else col
+               for col in dataframe_lc.columns]
+    dataframe_lc.columns = columns
+    axes = defaultdict(lambda: plt.figure().add_subplot(111))
+    pyplot_attr = {
+        'title': 'Performance on {} data set'.format(data_set.upper()),
+        'xlabel': 'Epoch',
+    }
+    # columns = set(dataframe_rl.select_dtypes('number').columns) - {'epoch'}
+    for column in columns:
+        pyplot_attr['ylabel'] = column.capitalize()
+        utils_plot.set_attributes(axes[column], pyplot_attr)
+    dataframe_lc.columns = columns
+
+    plot_results(axes, dataframe_lc, 'epoch', 'Logistic Classification')
+    for axis in axes.values():
+        utils_plot.add_legend(axis)
+    plt.show()
+
+
 def main():
     '''Evaluate a trained model against logistic regression.'''
     parser = argparse.ArgumentParser()
@@ -175,8 +220,8 @@ def main():
                         type=str, default='iris')
     args = parser.parse_args()
     tf.logging.set_verbosity(tf.logging.ERROR)
-    run_multi(args.model_weights, args.trials, args.batch_size,
-              args.total_epochs, args.data_set)
+    run_lr(args.model_weights, args.trials, args.batch_size,
+           args.total_epochs, args.data_set)
 
 
 if __name__ == '__main__':

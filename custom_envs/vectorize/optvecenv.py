@@ -42,6 +42,9 @@ class OptEnvRunner:
         infos = [infos]*len(states)
         return states, rewards, terminals, infos
 
+    def close(self):
+        self.environment.close()
+
 
 class OptVecEnv(VecEnv):
     '''A class for running multiple Optimize type environments.'''
@@ -86,7 +89,8 @@ class OptVecEnv(VecEnv):
         return states, rewards, terminals, infos
 
     def close(self):
-        pass
+        for env in self.environments:
+            env.close()
 
     def get_attr(self, attr_name, indices=None):
         pass
@@ -97,3 +101,4 @@ class OptVecEnv(VecEnv):
     def env_method(self, method_name, *method_args, indices=None,
                    **method_kwargs):
         pass
+        
