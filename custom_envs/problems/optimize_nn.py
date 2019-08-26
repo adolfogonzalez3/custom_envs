@@ -64,8 +64,14 @@ class OptimizeNN(BaseProblem):
         self.reset()
 
     @classmethod
-    def create(cls, *args, **kwargs):
-        '''Create an object of the class.'''
+    def create(cls, model_fn=None, data_set=None):
+        '''
+        Create a problem with the goal of optimizing a NN for a data set.
+
+        :param model_fn: () A function which returns a keras model.
+        :param data_set: () A function which returns a data set.
+        :return: (OptimizeNN)
+        '''
         return utils_tf.wrap_in_session(cls)(*args, **kwargs)
 
     @property
