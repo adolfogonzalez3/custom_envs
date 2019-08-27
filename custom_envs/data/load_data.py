@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
+from sklearn import datasets
 
 from custom_envs.data.sequence import InMemorySequence
 from custom_envs.utils.utils_image import resize_array_many, convert_many
@@ -101,6 +102,9 @@ def load_data(name='iris', batch_size=None, num_of_labels=None):
         features = np.reshape(images_tr, (len(labels_tr), -1))
         features = normalize(features)
         labels, _ = to_onehot(labels_tr)
+    elif name == 'random_gaussians':
+        features, labels = datasets.make_classification()
+        labels, _ = to_onehot(labels, 2)
     else:
         raise RuntimeError('No such data set named: {}'.format(name))
     sequence = InMemorySequence(features, labels, batch_size)
