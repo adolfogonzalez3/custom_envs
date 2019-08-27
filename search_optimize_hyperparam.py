@@ -8,6 +8,7 @@ from functools import partial
 import gym
 import optuna
 import tensorflow as tf
+from tqdm import trange
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines import PPO2, A2C
 from stable_baselines.common.misc_util import set_global_seeds
@@ -19,52 +20,85 @@ from custom_envs.vectorize.optvecenv import OptVecEnv
 LOGGER = logging.getLogger(__name__)
 
 
-def run_agent(envs, parameters):
+def run_agent(envs, parameters, trial):
     '''Train an agent.'''
     path = Path(parameters['path'])
     dummy_env = OptVecEnv(envs)
     set_global_seeds(parameters.setdefault('seed'))
     if parameters['alg'] == 'PPO':
-        model = PPO2(MlpPolicy, dummy_env, gamma=parameters['gamma'],
-                     learning_rate=parameters['learning_rate'], verbose=0,
-                     nminibatches=dummy_env.num_envs)
+        model = PPO2(
+            MlpPolicy, dummy_env, gamma=parameters['gamma'],
+            learning_rate=parameters['learning_rate'], verbose=0
+        )
     elif parameters['alg'] == 'A2C':
-        model = A2C(MlpPolicy, dummy_env, gamma=parameters['gamma'],
-                    learning_rate=parameters['learning_rate'], verbose=0)
+        model = A2C(
+            MlpPolicy, dummy_env, gamma=parameters['gamma'],
+            learning_rate=parameters['learning_rate'], verbose=0
+        )
     try:
-        timesteps = dummy_env.num_envs * parameters['total_timesteps']
-        model.learn(total_timesteps=timesteps)
+        timesteps = parameters['total_timesteps'] * dummy_env.agent_no_list[0]
+        number_of_updates = parameters['total_timesteps'] // 128
+        with trange(number_of_updates, leave=True) as progress:
+            progress = iter(progress)
+
+            def callback(local_vars, global_vars):
+                if next(progress) % 100:
+                    callback_env = local_vars['self'].env
+                    metric = sum(
+                        sum(r) for r in
+                        callback_env.env_method('get_episode_rewards')
+                    )
+                    trial.report(metric, local_vars['update'])
+                    #if trial.should_prune():
+                    #    raise optuna.structs.TrialPruned()
+
+            model.learn(total_timesteps=timesteps, callback=callback)
+        return sum(sum(r) for r in dummy_env.env_method('get_episode_rewards'))
     finally:
         dummy_env.close()
         model.save(str(path / 'model.pkl'))
 
 
-def optuna_callback(trial, episode_info):
-    if episode_info['done']:
-        trial.report(episode_info['info']['loss'], episode_info['episode'])
-        if trial.should_prune():
-            raise optuna.structs.TrialPruned()
+def get_parameters(trial):
+    parameters = {
+        'gamma': float(trial.suggest_loguniform(
+            'gamma', 0.9, 0.99
+        )),
+        'learning_rate': float(trial.suggest_loguniform(
+            'learning_rate', 1e-6, 1e0
+        )),
+        'kwargs': {
+            # 6 points to search
+            # 'version': int(trial.suggest_int('version', 0, 5)),
+            # 4 points to search
+            # 'reward_version': 0,  # int(trial.suggest_int('reward_version', 0, 3)),
+            # 2 points to search
+            # 'action_version': int(trial.suggest_int('action_version', 0, 1)),
+            # 5 points to search
+            #'batch_size': int(trial.suggest_categorical(
+            #    'batch_size', [2**i for i in range(7, 12)]
+            #)),  # 4 points to search
+            # 'observation_version': int(trial.suggest_int(
+            #    'observation_version', 0, 3
+            # )),
+            # 5 points to search
+            'max_history': int(trial.suggest_discrete_uniform(
+                'max_history', 5, 25, 5
+            )),
+            # 5 points to search
+            #'max_batches': int(trial.suggest_discrete_uniform(
+            #    'max_batches', 100, 500, 100
+            #))
+            'max_batches': 500
+        }
+    }
+    return parameters
 
 
 def run_experiment(parameters, trial):
     '''Set up and run an experiment.'''
     parameters = parameters.copy()
-    batch_size = [2**i for i in range(5, 12)]
-    batch_size = int(trial.suggest_categorical('batch_size', batch_size))
-    obs_version = int(trial.suggest_int('observation_version', 0, 3))
-    max_history = int(trial.suggest_discrete_uniform('max_history', 5, 50, 5))
-    learning_rate = float(trial.suggest_loguniform('learning_rate', 1e-5, 1e0))
-    parameters.update({
-        'gamma': float(trial.suggest_uniform('gamma', 0.1, 1.0)),
-        'learning_rate': learning_rate
-    })
-    parameters.setdefault('kwargs', {}).update({
-        'batch_size': batch_size,
-        'version': int(trial.suggest_int('version', 0, 5)),
-        'observation_version': obs_version, 'max_history': max_history,
-        'reward_version': int(trial.suggest_int('reward_version', 0, 1)),
-        'action_version': int(trial.suggest_int('action_version', 0, 1))
-    })
+    parameters.update(get_parameters(trial))
     path = Path(parameters['path']) / str(trial.number)
     path.mkdir()
     parameters['path'] = str(path)
@@ -72,19 +106,21 @@ def run_experiment(parameters, trial):
     log_path = str(path / 'monitor_{:d}')
     kwargs = parameters.setdefault('kwargs', {})
     utils_file.save_json(parameters, path / 'parameters.json')
-    callback = partial(optuna_callback, trial)
-    env = Monitor(
-        gym.make(parameters['env_name'], **kwargs), log_path.format(0),
-        info_keywords=(
-            'loss', 'accuracy', 'actions_mean',
-            'weights_mean', 'actions_std',
-            'states_mean', 'grads_mean'
-        ),
-        chunk_size=parameters.setdefault('chunk_size', 5),
-        callbacks=[callback]
-    )
-    run_agent([partial(lambda x: x, env)], parameters)
-    return env.last_info['loss']
+    wrapped_envs = [
+        partial(
+            Monitor,
+            partial(
+                gym.make, parameters['env_name'], **kwargs
+            ),
+            log_path.format(i),
+            info_keywords=(
+                'loss', 'actions_mean',
+                'weights_mean', 'actions_std',
+                'states_mean', 'grads_mean'
+            ), chunk_size=parameters.setdefault('chunk_size', 5)
+        ) for i in range(1)
+    ]
+    return -run_agent(wrapped_envs, parameters, trial)
 
 
 def main():
@@ -93,14 +129,13 @@ def main():
     tf.logging.set_verbosity(tf.logging.ERROR)
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="The path to save the results.")
-    parser.add_argument("--alg", help="The algorithm to use.",
-                        default='PPO')
+    parser.add_argument("--alg", help="The algorithm to use.", default='PPO')
     parser.add_argument("--env_name", help="The gamma to use.",
                         default='MultiOptLRs-v0')
-    parser.add_argument('--total_timesteps', default=int(1e6), type=int,
+    parser.add_argument('--total_timesteps', default=int(1e5), type=int,
                         help="Number of timesteps per training session")
     parser.add_argument('--data_set', help="The data set to use.",
-                        default='mnist')
+                        default='iris')
     parser.add_argument('--trials', help="The number of trials to run.",
                         default=10, type=int)
     args = parser.parse_args()
@@ -120,10 +155,13 @@ def main():
                                    'study.'))
     objective = partial(run_experiment, parameters)
     storage = 'sqlite:///' + str(path / 'study.db')
-    study = optuna.create_study(study_name=str(path.name),
-                                storage=storage, load_if_exists=True,
-                                pruner=optuna.pruners.MedianPruner())
+    study = optuna.create_study(
+        study_name=str(path.name),
+        storage=storage, load_if_exists=True,
+        pruner=optuna.pruners.MedianPruner()
+    )
     study.optimize(objective, n_trials=args.trials)
+
 
 
 if __name__ == '__main__':
