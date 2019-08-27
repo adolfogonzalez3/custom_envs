@@ -24,7 +24,9 @@ def get_descendants(class_obj):
 
 def compare_lists(list_1, list_2):
     '''Used to compare lists.'''
-    list_cmp = [np.isclose(l1, l2) for l1, l2 in zip(list_1, list_2)]
+    list_cmp = [
+        np.isclose(l1, l2, atol=1e-6) for l1, l2 in zip(list_1, list_2)
+    ]
     indices = [i for i, truth in enumerate(list_cmp) if not truth]
     return not bool(indices)
 
