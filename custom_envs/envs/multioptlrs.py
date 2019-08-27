@@ -37,10 +37,9 @@ class MultiOptLRs(BaseMultiEnvironment):
                        the target network's parameters.
     """
 
-    def __init__(self, data_set='iris', batch_size=None, max_batches=400,
-                 max_history=5):
+    def __init__(self, problem='func', max_batches=400, max_history=5):
         super().__init__()
-        self.model = get_problem(data_set=load_data(data_set, batch_size))
+        self.model = get_problem(problem)
         self.history = History(
             5, losses=(), gradients=(self.model.size,),
             weights=(self.model.size,)
