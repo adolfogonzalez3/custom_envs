@@ -15,4 +15,4 @@ __pycache__
 *.gz
 *.hdf5
 ignore/
-*.git
+*.gif
