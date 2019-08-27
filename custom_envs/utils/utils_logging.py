@@ -2,6 +2,7 @@
 A module for logging utilities and classes.
 """
 import time
+import logging
 from collections import defaultdict
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import gym
 from gym.core import Wrapper
 import pandas as pd
 
+LOGGER = logging.getLogger(__name__)
 
 class Monitor(Wrapper):
     """
@@ -34,6 +36,8 @@ class Monitor(Wrapper):
         :param callback: (callable) Called every step and fed the current
                                     state, reward, done, and info.
         """
+        if callable(env):
+            env = env()
         Wrapper.__init__(self, env=env)
         self.t_start = time.time()
         if file_path is not None:
