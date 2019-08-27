@@ -5,10 +5,10 @@ from pathlib import Path
 from functools import partial
 from itertools import chain
 
-import optuna
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import optuna
 
 from custom_envs.data import load_data
 import custom_envs.utils.utils_file as utils_file
@@ -57,28 +57,25 @@ def train_model(parameters, trial):
     sequence = load_data(parameters['data_set'])
     features = sequence.features
     labels = sequence.labels
+    layers = [features.shape[-1], labels.shape[-1]]
+    use_bias = True
     graph = tf.Graph()
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.9
     with graph.as_default():
-        model = tf.keras.Sequential()
-        model.add(tf.keras.layers.Dense(
-            48, input_shape=features.shape[1:],
-            kernel_initializer=tf.keras.initializers.glorot_normal(),
-            bias_initializer=tf.keras.initializers.glorot_normal(),
-            activation='relu', use_bias=True
-        ))
-        model.add(tf.keras.layers.Dense(
-            48, activation='relu', use_bias=True,
-            kernel_initializer=tf.keras.initializers.glorot_normal(),
-            bias_initializer=tf.keras.initializers.glorot_normal()
-        ))
-        model.add(tf.keras.layers.Dense(
-            labels.shape[-1], activation='softmax',
-            kernel_initializer=tf.keras.initializers.glorot_normal(),
-            bias_initializer=tf.keras.initializers.glorot_normal()
-        ))
+        target = tf.keras.layers.Input((1,))
+        model_in = tf.keras.layers.Input([layers[0]])
+        tensor = model_in
+        layers = [layers[0], layers[-1]]
+        for layer in layers[1:-1]:
+            layer = tf.keras.layers.Dense(layer, use_bias=use_bias,
+                                          activation='relu')
+            tensor = layer(tensor)
+        layer = tf.keras.layers.Dense(layers[-1], use_bias=use_bias,
+                                      activation='softmax')
+        tensor = layer(tensor)
+        model = tf.keras.Model(inputs=model_in, outputs=tensor)
         callbacks = [CustomCallback(trial, 'loss')]
         with tf.Session(graph=graph, config=config):
             try:
@@ -102,8 +99,7 @@ def main():
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     tf.logging.set_verbosity(tf.logging.ERROR)
     parser = argparse.ArgumentParser()
-    parser.add_argument("path", help="The path to save the results.",
-                        type=Path)
+    parser.add_argument("path", help="The path to save the results.")
     parser.add_argument("--trials", help="The number of trials.",
                         type=int, default=10)
     parser.add_argument("--total_epochs", help="The number of epochs.",
