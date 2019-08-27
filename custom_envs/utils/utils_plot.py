@@ -1,6 +1,8 @@
 '''Utilities for plotting.'''
+from collections import defaultdict
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def plot_sequence(axes, sequence, **kwargs):
@@ -66,3 +68,23 @@ def set_attributes(axes, attr):
         axes.set_zlim(attr.get('zmin'), attr.get('zmax'))
     except AttributeError:
         pass
+
+
+def plot_results(axes, dataframe, groupby, label=None):
+    '''
+    Plot results on multiple axes given a dataframe.
+
+
+    '''
+    figures = defaultdict(plt.figure())
+    axes = {}
+    groupby = {groupby} if isinstance(groupby, str) else set(groupby)
+    grouped = dataframe.groupby(groupby)
+    mean_df = grouped.mean()
+    std_df = grouped.std()
+    columns = set(mean_df.columns) & set(axes.keys()) - groupby
+    for name in columns:
+        axes[name] = figures[name].add_subplot(111)
+        plot_sequence(axes[name], mean_df[name], label=label)
+        fill_between(axes[name], mean_df[name], std_df[name],
+                     alpha=0.1, label=label)
