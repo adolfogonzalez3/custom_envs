@@ -109,13 +109,17 @@ class History(Mapping):
         :param max_history: (int) The maximum number of past arrays stored.
         :param named_shapes: (**kwargs) Any arrays which are to be tracked.
         '''
-
         self.max_history = max_history
-        self.shapes = {name: tuple(shape) if shape else (1,)
-                       for name, shape in named_shapes.items()}
-        self.history = {key: deque([np.zeros(shape)]*self.max_history,
-                                   maxlen=self.max_history)
-                        for key, shape in self.shapes.items()}
+        self.shapes = {
+            name: tuple(shape) if shape else (1,)
+            for name, shape in named_shapes.items()
+        }
+        self.history = {
+            key: deque(
+                [np.zeros(shape)]*self.max_history, maxlen=self.max_history
+            )
+            for key, shape in self.shapes.items()
+        }
         self.iteration = 0
 
     def __repr__(self):
@@ -152,7 +156,7 @@ class History(Mapping):
     def reset(self, **named_items):
         '''
         Reset the history.
-        
+
         :named_items: (dict) If given then must be all contain all keys in
                              history. If this is true then will set all values
                              in history to named_items.
@@ -192,28 +196,6 @@ class History(Mapping):
         return states
 
 
-def build_multistate(grad_history, weight_history, loss_history, version=1):
-    '''Build the state for multiple agents.'''
-    if version == 0:
-        states = [(g,) for g in grad_history[0].ravel().tolist()]
-    elif version == 1:
-        loss_flat = float(loss_history[0])
-        grad_flat = grad_history[0].ravel().tolist()
-        states = [(loss_flat, g) for g in grad_flat]
-    elif version == 2:
-        loss_flat = float(loss_history[0])
-        grad_flat = grad_history[0].ravel().tolist()
-        wght_flat = weight_history[0].ravel().tolist()
-        states = [(w, loss_flat, g) for w, g in zip(wght_flat, grad_flat)]
-    elif version == 3:
-        shape = (len(loss_history), -1)
-        loss_flat = tuple(loss_history.ravel().tolist())
-        grad_flat = list(zip(*grad_history.reshape(shape).tolist()))
-        wght_flat = list(zip(*weight_history.reshape(shape).tolist()))
-        states = [w + loss_flat + g for w, g in zip(wght_flat, grad_flat)]
-    return states
-
-
 def flatten_arrays(arrays, dtype=np.float64):
     '''
     Flatten a list of numpy arrays into a single numpy array.
@@ -241,3 +223,33 @@ def from_flat(array, shapes):
         arrays.append(np.reshape(array[start:end], shape))
         start = end
     return arrays
+
+
+class AddProgressBar:
+    '''
+    A class that adds a progressbar.
+
+    If the class calls a method defined in the set given, then step once in
+    the progress bar. 
+    '''
+
+    def __init__(self, wrapped_object, attributes, progress_bar):
+        '''
+        Create a AddProgressBar instance.
+
+        :param object_instance: (Object) Methods will be wrapped in order to
+        add progress bar functionality.
+        :param attributes: (Sequence(str)) Names of attributes that will cause
+        the progress bar to step once.
+        :param kwargs: (**kwargs) Keyword arguments to pass into tqdm bar.
+        '''
+        self._wrapped_object = wrapped_object
+        self._attributes = set(attributes)
+        self._progress_bar = progress_bar
+
+    def __getattr__(self, attr):
+        if attr in self.__dict__:
+            return getattr(self, attr)
+        if attr in self._attributes:
+            next(self._progress_bar)
+        return getattr(self._wrapped_object, attr)
