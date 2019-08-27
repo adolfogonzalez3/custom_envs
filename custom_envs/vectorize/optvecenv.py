@@ -1,28 +1,31 @@
 '''Module that contains a class for vectorizing optimize environments.'''
 from itertools import chain
+from functools import partial
 
 import numpy as np
-from stable_baselines.common.vec_env import VecEnv
+
+from custom_envs.vectorize.concurrentvecenv import ThreadVecEnv
 
 
 def flatten_dictionary(dictionary):
     '''Flatten dictionary from the Optimize type environments.'''
     names_values = [(name, value) for name, value in dictionary.items()]
-    _, values = list(zip(*sorted(names_values, key=lambda x: x[0])))
+    _, values = zip(*sorted(names_values, key=lambda x: x[0]))
     return values
 
 
 class OptEnvRunner:
     '''A class for running an Optimize type environment.'''
+
     def __init__(self, environment_fn):
         environment = environment_fn()
-        self.names = sorted(iter(environment.action_space.spaces),
-                            key=lambda x: x[0])
-        name = self.names[0]
-        self.environment = environment
+        self._names = sorted(iter(environment.action_space.spaces),
+                             key=lambda x: x[0])
+        name = self._names[0]
+        self._environment = environment
         self.observation_space = environment.observation_space.spaces[name]
         self.action_space = environment.action_space.spaces[name]
-        self.agents = len(environment.observation_space.spaces)
+        self._num_agents = len(environment.observation_space.spaces)
         for space in environment.observation_space.spaces.values():
             assert space == self.observation_space
         for space in environment.action_space.spaces.values():
@@ -30,75 +33,59 @@ class OptEnvRunner:
 
     def reset(self):
         '''Reset then environment and return the states for each parameter.'''
-        return flatten_dictionary(self.environment.reset())
+        return flatten_dictionary(self._environment.reset())
 
     def step(self, actions):
         '''Apply an action to the environment.'''
-        actions = {name: action for name, action in zip(self.names, actions)}
-        states, rewards, terminals, infos = self.environment.step(actions)
+        actions = {name: action for name, action in zip(self._names, actions)}
+        states, reward, terminal, info = self._environment.step(actions)
         states = flatten_dictionary(states)
-        rewards = [rewards]*len(states)
-        terminals = [terminals]*len(states)
-        infos = [infos]*len(states)
-        return states, rewards, terminals, infos
+        reward = [reward]*self._num_agents
+        terminal = [terminal]*self._num_agents
+        info = [info]*self._num_agents
+        return states, reward, terminal, info
 
     def close(self):
-        self.environment.close()
+        self._environment.close()
+
+    def __getattr__(self, attr):
+        if attr in self.__dict__:
+            return getattr(self, attr)
+        return getattr(self._environment, attr)
 
 
-class OptVecEnv(VecEnv):
+class OptVecEnv(ThreadVecEnv):
     '''A class for running multiple Optimize type environments.'''
-    def __init__(self, environment_fns):
-        '''Create all environments and ensure that all have similar space.'''
-        self.environments = [OptEnvRunner(env) for env in environment_fns]
-        observation_space = self.environments[0].observation_space
-        action_space = self.environments[0].action_space
-        agents = sum(env.agents for env in self.environments)
-        super().__init__(agents, observation_space, action_space)
-        self.states = []
-        self.rewards = []
-        self.terminals = []
-        self.infos = []
 
-    def reset(self):
-        states = [env.reset() for env in self.environments]
-        return np.stack(list(chain.from_iterable(states)))
+    def __init__(self, environment_fns, callbacks=()):
+        '''Create all environments and ensure that all have similar space.'''
+        environment_fns = [
+            partial(OptEnvRunner, env) for env in environment_fns
+        ]
+        super().__init__(environment_fns)
+        self.agent_no_list = self.get_attr('_num_agents')
+        self.num_envs = sum(self.agent_no_list)
+        self.callbacks = callbacks
 
     def step_async(self, actions):
+        grouped_actions = []
         start = 0
-        for environment in self.environments:
-            actions_env = actions[start:(start + environment.agents)]
-            states, rewards, terminals, infos = environment.step(actions_env)
-            if np.all(terminals):
-                states = environment.reset()
-            self.states.append(states)
-            self.rewards.append(rewards)
-            self.terminals.append(terminals)
-            self.infos.append(infos)
-            start = start + environment.agents
+        for agent_no in self.agent_no_list:
+            grouped_actions.append(actions[start:(start + agent_no)])
+            start = start + agent_no
+        super().step_async(grouped_actions)
 
     def step_wait(self):
-        states = np.stack(list(chain.from_iterable(self.states)))
-        rewards = np.stack(list(chain.from_iterable(self.rewards)))
-        terminals = np.stack(list(chain.from_iterable(self.terminals)))
-        infos = list(chain.from_iterable(self.infos))
-        self.states = []
-        self.rewards = []
-        self.terminals = []
-        self.infos = []
+        results = [remote.recv() for remote in self.remotes]
+        self.waiting = False
+        obs, rews, dones, infos = zip(*results)
+        states = np.stack(list(chain.from_iterable(obs)))
+        rewards = np.stack(list(chain.from_iterable(rews)))
+        terminals = np.stack(list(chain.from_iterable(dones)))
+        infos = list(chain.from_iterable(infos))
+        for callback in self.callbacks:
+            callback(states, rewards, terminals, infos)
         return states, rewards, terminals, infos
 
-    def close(self):
-        for env in self.environments:
-            env.close()
-
-    def get_attr(self, attr_name, indices=None):
-        pass
-
-    def set_attr(self, attr_name, value, indices=None):
-        pass
-
-    def env_method(self, method_name, *method_args, indices=None,
-                   **method_kwargs):
-        pass
-        
+    def reset(self):
+        return np.stack(list(chain.from_iterable(super().reset())))
