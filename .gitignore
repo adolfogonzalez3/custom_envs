@@ -13,4 +13,6 @@ __pycache__
 *.db
 *.txt
 *.gz
+*.hdf5
 ignore/
+*.git
