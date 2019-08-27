@@ -60,7 +60,7 @@ class Optimize(BaseEnvironment):
         self.loss_hist.fill(0)
         self.grad_hist.fill(0)
         self.wght_hist.fill(0)
-        self.model.reset(npr)
+        self.model.reset()
         self.sequence.shuffle()
         return np.concatenate([self.wght_hist[0].ravel(),
                                self.loss_hist[0].ravel(),
