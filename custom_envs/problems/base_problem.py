@@ -66,3 +66,8 @@ class BaseProblem:
     def size(self):
         '''Return the number of parameters.'''
         return len(self.get_parameters())
+
+    @property
+    def parameters(self):
+        '''Return the parameters of the problem.'''
+        return self.get_parameters()
