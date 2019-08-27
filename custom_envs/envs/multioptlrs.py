@@ -3,20 +3,21 @@
 from collections import namedtuple
 
 import numpy as np
-from gym.spaces import Box, Dict
+from gym.spaces import Dict
 
 import custom_envs.utils.utils_env as utils_env
 from custom_envs import load_data
-from custom_envs.models import ModelKeras as Model
+from custom_envs.problems import get_problem
 from custom_envs.envs import BaseMultiEnvironment
-from custom_envs.utils.utils_common import History, enzip
+from custom_envs.utils.utils_common import History
 
 VersionType = namedtuple('VersionType', ['history', 'observation', 'action',
                                          'reward'])
 
+BOUNDS = 1e2
+
 
 class MultiOptLRs(BaseMultiEnvironment):
-
     """
     Summary:
     The optimize environment requires an agent to reduce the
@@ -37,19 +38,16 @@ class MultiOptLRs(BaseMultiEnvironment):
     """
 
     def __init__(self, data_set='iris', batch_size=None, max_batches=400,
-                 max_history=5, version=1, observation_version=0,
-                 action_version=0, reward_version=0):
+                 max_history=5):
         super().__init__()
-        self.sequence = load_data(data_set, batch_size)
-        num_of_labels = self.sequence.label_shape[0]
-        feature_size = self.sequence.feature_shape[0]
-        self.model = Model(feature_size, num_of_labels, use_bias=True)
-        self.history = History(5, losses=(), gradients=(self.model.size,),
-                               weights=(self.model.size,))
-        result = utils_env.get_obs_version((self.model.size,), max_history,
-                                           version)
+        self.model = get_problem(data_set=load_data(data_set, batch_size))
+        self.history = History(
+            5, losses=(), gradients=(self.model.size,),
+            weights=(self.model.size,)
+        )
+        result = utils_env.get_obs_version((self.model.size,), max_history, 3)
         obs_space, self.adjusted_history = result
-        act_space = utils_env.get_action_space_optlrs(action_version)
+        act_space = utils_env.get_action_space_optlrs(0)
 
         self.observation_space = Dict({
             MultiOptLRs.AGENT_FMT.format(i): obs_space
@@ -62,86 +60,56 @@ class MultiOptLRs(BaseMultiEnvironment):
         self.seed()
         self.max_history = max_history
         self.max_batches = max_batches
-        self.version = VersionType(version, observation_version,
-                                   action_version, reward_version)
+        self.version = VersionType(3, 3, 0, 1)
 
     def base_reset(self):
         self.adjusted_history.reset()
         self.model.reset()
-        if True:
-            seq_idx = len(self.sequence) - 1
-            features, labels = self.sequence[seq_idx]
-            loss, grad, _ = self.model.compute_backprop(features, labels)
-            self.history.reset(losses=loss, gradients=grad,
-                               weights=self.model.weights)
-        else:
-            self.history.reset()
+        self.history.reset()
+        grad, loss, weight = self.model.get()
+        self.history.append(losses=loss, gradients=grad, weights=weight)
         states = self.adjusted_history.build_multistate()
         states = {
-            MultiOptLRs.AGENT_FMT.format(i): list(v)
-            for i, v, a in enzip(states, self.model.layer_activations)
+            MultiOptLRs.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS)
+            for i, v in enumerate(states)
         }
         return states
 
     def base_step(self, action):
-        action = np.reshape([action[MultiOptLRs.AGENT_FMT.format(i)].ravel()
-                             for i in range(self.model.size)], (-1,))
-        seq_idx = self.current_step % len(self.sequence)
-        features, labels = self.sequence[seq_idx]
-
-        loss, grad, accu = self.model.compute_backprop(features, labels)
+        action = np.reshape([
+            action[MultiOptLRs.AGENT_FMT.format(i)].ravel()
+            for i in range(self.model.size)
+        ], (-1,))
+        grad = self.model.get_gradient()
         action = utils_env.get_action_optlrs(action, self.version.action)
-        new_weights = self.model.weights - grad*action
-
-        self.model.set_weights(new_weights)
-        loss = self.model.compute_loss(features, labels)
-        seq_idx = (self.current_step + 1) % len(self.sequence)
-        if seq_idx == 0:
-            self.sequence.shuffle()
-        features, labels = self.sequence[seq_idx]
-        _, grad, accu = self.model.compute_backprop(features, labels)
-
-        self.history.append(losses=loss, gradients=grad, weights=new_weights)
-        adjusted = utils_env.get_observation(self.history,
-                                             self.version.observation)
-        adjusted_loss, adjusted_wght, adjusted_grad = adjusted
-
-        if self.version.history == 0 or self.version.history == 4:
-            self.adjusted_history.append(gradients=adjusted_grad)
-        elif self.version.history == 1:
-            self.adjusted_history.append(losses=adjusted_loss,
-                                         gradients=adjusted_grad)
-        elif self.version.history == 2 or self.version.history == 3:
-            self.adjusted_history.append(weights=adjusted_wght,
-                                         losses=adjusted_loss,
-                                         gradients=adjusted_grad)
-        elif self.version.history == 5:
-            self.adjusted_history.append(losses=adjusted_loss,
-                                         gradients=adjusted_grad,
-                                         actions=action)
-        else:
-            raise RuntimeError()
+        self.model.set_parameters(self.model.parameters - grad*action)
+        grad, loss, weights = self.model.get()
+        self.history.append(losses=loss, gradients=grad, weights=weights)
+        adj_loss, adj_wght, adj_grad = utils_env.get_observation(
+            self.history, self.version.observation
+        )
+        self.adjusted_history.append(
+            weights=adj_wght, losses=adj_loss, gradients=adj_grad
+        )
         state = self.adjusted_history.build_multistate()
         states = {
-            MultiOptLRs.AGENT_FMT.format(i): list(v)
-            for i, v, a in enzip(state, self.model.layer_activations)
+            MultiOptLRs.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS)
+            for i, v in enumerate(state)
         }
-        reward = utils_env.get_reward(loss, adjusted_loss, self.version.reward)
+        reward = utils_env.get_reward(loss, adj_loss, 1)
+        reward = np.clip(reward, -BOUNDS, BOUNDS)
         terminal = self._terminal()
-
-        accuracy = None
-        data_loss = None
-        if seq_idx == 0 or terminal:
-            features = self.sequence.features
-            labels = self.sequence.labels
-            accuracy = self.model.compute_accuracy(features, labels)
-            data_loss = self.model.compute_loss(features, labels)
+        if not terminal and loss > 1e3:
+            terminal = True
+        final_loss = None
+        if terminal:
+            final_loss = self.model.get_loss()
         past_grads = self.history['gradients']
         info = {
-            'loss': data_loss, 'accuracy': accuracy,
-            'batch_loss': loss, 'batch_accuracy': accu,
-            'weights_mean': np.mean(np.abs(new_weights)),
-            'weights_sum': np.sum(np.abs(new_weights)),
+            'loss': final_loss,
+            'batch_loss': loss,
+            'weights_mean': np.mean(np.abs(weights)),
+            'weights_sum': np.sum(np.abs(weights)),
             'actions_mean': np.mean(action),
             'actions_std': np.std(action),
             'states_mean': np.mean(np.abs(state)),
@@ -149,11 +117,12 @@ class MultiOptLRs(BaseMultiEnvironment):
             'grads_mean': np.mean(self.history['gradients']),
             'grads_sum': np.sum(self.history['gradients']),
             'loss_mean': np.mean(self.history['losses']),
-            'adjusted_loss': float(adjusted_loss),
-            'adjusted_grad': np.mean(np.abs(adjusted_grad)),
-            'grad_diff': np.mean(np.abs(past_grads[0] - past_grads[1]))
+            'adjusted_loss': float(adj_loss),
+            'adjusted_grad': np.mean(np.abs(adj_grad)),
+            'grad_diff': np.mean(np.abs(past_grads[0] - past_grads[1])),
+            'weights': weights
         }
-
+        self.model.next()
         return states, reward, terminal, info
 
     def _terminal(self):
