@@ -72,7 +72,7 @@ class OptimizeNN(BaseProblem):
         :param data_set: () A function which returns a data set.
         :return: (OptimizeNN)
         '''
-        return utils_tf.wrap_in_session(cls)(*args, **kwargs)
+        return utils_tf.wrap_in_session(cls)(model_fn, data_set)
 
     @property
     def size(self):
