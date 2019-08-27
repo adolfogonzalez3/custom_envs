@@ -9,7 +9,9 @@ import numpy as np
 from stable_baselines.common.vec_env import VecEnv, CloudpickleWrapper
 from stable_baselines.common.tile_images import tile_images
 
-from custom_envs.networking import create_pipe
+
+def create_pipe():
+    return mp.Pipe(True)
 
 
 def get_context(start_method):
@@ -29,7 +31,9 @@ def _worker(remote, env_fn_wrapper):
             cmd, data = remote.recv()
             if cmd == 'step':
                 observation, reward, done, info = env.step(data)
-                if done:
+                if any(done):
+                    # save final observation where user can get it, then reset
+                    #info['terminal_observation'] = observation
                     observation = env.reset()
                 remote.send((observation, reward, done, info))
             elif cmd == 'reset':
@@ -52,7 +56,7 @@ def _worker(remote, env_fn_wrapper):
             else:
                 raise NotImplementedError
     except EOFError:
-        return
+        pass
     finally:
         env.close()
 
