@@ -88,6 +88,8 @@ def get_reward(loss, adjusted_loss, version=0):
         reward = float(1 / loss) * 100
     elif version == 4:
         reward = np.log(1 / loss)
+    elif version == 5:
+        reward = -(float(adjusted_loss) - 1)**2
     else:
         raise RuntimeError()
     return reward
