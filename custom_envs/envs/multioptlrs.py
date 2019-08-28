@@ -95,12 +95,12 @@ class MultiOptLRs(BaseMultiEnvironment):
             self.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS) - 1
             for i, v in enumerate(state)
         }
-        reward = utils_env.get_reward(loss, adj_loss, 5)
+        reward = utils_env.get_reward(loss, adj_loss, 6)
         reward = np.clip(reward, -BOUNDS, BOUNDS)
         terminal = self._terminal()
         if not terminal and loss > 1e3:
             terminal = True
-            reward -= (self.max_batches - self.current_step)*BOUNDS
+            reward = reward - 1
         final_loss = None
         if terminal:
             final_loss = self.model.get_loss()
