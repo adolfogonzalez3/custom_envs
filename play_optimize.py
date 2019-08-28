@@ -22,6 +22,7 @@ import custom_envs.utils.utils_file as utils_file
 import custom_envs.utils.utils_common as utils_common
 from custom_envs.utils.utils_logging import Monitor
 from custom_envs.vectorize.optvecenv import OptVecEnv
+from custom_envs.utils.utils_functions import compute_rosenbrock
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,12 +40,6 @@ class Animate(Callable):
         self.artists.append(self.axis.plot(pos_x, pos_y, 'r')[0])
         return self.artists[-1]
 
-
-def rosenbrock(x, y):
-    '''Rosenbrock's banana function: f(x,y)=(1-x)^2+100(y-x^2)^2'''
-    return 100*(y - x**2)**2 + (1 - x)**2
-
-
 def live_plot(optimize, name):
     discrete_points = 100  # number of discretization points along both axes
     x_range = (-2., 2.)
@@ -54,7 +49,7 @@ def live_plot(optimize, name):
         np.linspace(*x_range, discrete_points),
         np.linspace(*y_range, discrete_points)
     )
-    z_points = rosenbrock(x_points, y_points)
+    z_points = compute_rosenbrock(x_points, y_points)
 
     fig = plt.figure()
     plt.rc('font', family='serif')

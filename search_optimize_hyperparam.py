@@ -9,7 +9,7 @@ import gym
 import optuna
 import tensorflow as tf
 from tqdm import trange
-from stable_baselines.common.policies import MlpPolicy
+from stable_baselines.common.policies import MlpPolicy, MlpLstmPolicy
 from stable_baselines import PPO2, A2C
 from stable_baselines.common.misc_util import set_global_seeds
 
@@ -27,8 +27,9 @@ def run_agent(envs, parameters, trial):
     set_global_seeds(parameters.setdefault('seed'))
     if parameters['alg'] == 'PPO':
         model = PPO2(
-            MlpPolicy, dummy_env, gamma=parameters['gamma'],
-            learning_rate=parameters['learning_rate'], verbose=0
+            MlpLstmPolicy, dummy_env, gamma=parameters['gamma'],
+            learning_rate=parameters['learning_rate'], verbose=0,
+            nminibatches=2
         )
     elif parameters['alg'] == 'A2C':
         model = A2C(
@@ -62,10 +63,10 @@ def run_agent(envs, parameters, trial):
 def get_parameters(trial):
     parameters = {
         'gamma': float(trial.suggest_loguniform(
-            'gamma', 0.9, 0.99
+            'gamma', 0.1, 0.99
         )),
         'learning_rate': float(trial.suggest_loguniform(
-            'learning_rate', 1e-6, 1e0
+            'learning_rate', 1e-6, 1e-3
         )),
         'kwargs': {
             # 6 points to search
