@@ -76,7 +76,7 @@ class MultiOptLRs(BaseMultiEnvironment):
 
     def base_step(self, action):
         action = np.reshape([
-            action[MultiOptLRs.AGENT_FMT.format(i)].ravel()
+            action[self.AGENT_FMT.format(i)].ravel()
             for i in range(self.model.size)
         ], (-1,))
         grad = self.model.get_gradient()
@@ -92,14 +92,15 @@ class MultiOptLRs(BaseMultiEnvironment):
         )
         state = self.adjusted_history.build_multistate()
         states = {
-            MultiOptLRs.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS)
+            self.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS) - 1
             for i, v in enumerate(state)
         }
-        reward = utils_env.get_reward(loss, adj_loss, 1)
+        reward = utils_env.get_reward(loss, adj_loss, 5)
         reward = np.clip(reward, -BOUNDS, BOUNDS)
         terminal = self._terminal()
         if not terminal and loss > 1e3:
             terminal = True
+            reward -= (self.max_batches - self.current_step)*BOUNDS
         final_loss = None
         if terminal:
             final_loss = self.model.get_loss()
