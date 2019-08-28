@@ -100,7 +100,7 @@ class MultiOptLRs(BaseMultiEnvironment):
         terminal = self._terminal()
         if not terminal and loss > 1e3:
             terminal = True
-            reward = reward - 1
+            reward -= (self.max_batches - self.current_step)
         final_loss = None
         if terminal:
             final_loss = self.model.get_loss()
