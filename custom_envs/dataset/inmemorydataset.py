@@ -1,8 +1,8 @@
 '''A class for loading data in batches in memory.'''
 import math
 
+from custom_envs.dataset import BatchType, DataSet
 from custom_envs.utils.utils_common import shuffle
-from custom_envs.data.sequence import DataSet, BatchType
 
 
 class InMemoryDataSet(DataSet):
@@ -15,6 +15,7 @@ class InMemoryDataSet(DataSet):
         self.batch_size = len(features) if batch_size is None else batch_size
 
     def on_epoch_end(self):
+        '''Called at the end of an epoch.'''
         self.features, self.targets = shuffle(self.features, self.targets)
 
     def __len__(self):
@@ -24,7 +25,7 @@ class InMemoryDataSet(DataSet):
         begin = idx*self.batch_size
         end = begin + self.batch_size
         idx = slice(begin, end if idx < len(self) else None)
-        return BatchType(self.features[idx], self.labels[idx])
+        return BatchType(self.features[idx], self.targets[idx])
 
     @property
     def feature_shape(self):

@@ -1,7 +1,7 @@
 '''A module containing an abstract class for representing data sets.'''
 
-from collections import namedtuple
 from abc import abstractmethod
+from collections import namedtuple
 
 from tensorflow.keras.utils import Sequence
 
@@ -11,12 +11,12 @@ BatchType = namedtuple('BatchType', ['features', 'labels'])
 class DataSet(Sequence):
     '''An abstract class for representing data sets.'''
 
-    @abstractmethod
     @property
+    @abstractmethod
     def feature_shape(self):
         '''Return the shape of the features.'''
 
-    @abstractmethod
     @property
+    @abstractmethod
     def target_shape(self):
         '''Return the shape of the targets.'''
