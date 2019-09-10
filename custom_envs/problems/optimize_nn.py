@@ -23,8 +23,8 @@ class OptimizeNN(BaseProblem):
         '''
         Create a problem with the goal of optimizing a NN for a data set.
 
-        :param model_fn: () A function which returns a keras model.
-        :param data_set: () A function which returns a data set.
+        :param model_fn: (callable) A function which returns a keras model.
+        :param data_set: (callable) A function which returns a data set.
         '''
         self.data_set_iter = None
         self.current_batch = None
@@ -33,14 +33,14 @@ class OptimizeNN(BaseProblem):
         else:
             self.data_set = load_data()
         inputs = keras.Input(self.data_set.feature_shape, name='feature')
-        target = keras.Input(self.data_set.label_shape, name='target')
+        target = keras.Input(self.data_set.target_shape, name='target')
         with tf.name_scope('network'):
             if callable(model_fn):
                 outputs = model_fn(inputs)
             else:
                 outputs = utils_tf.create_neural_net(inputs)
             outputs = keras.layers.Dense(
-                self.data_set.label_shape[0], activation='softmax'
+                self.data_set.target_shape[0], activation='softmax'
             )(outputs)
         weight_tensors = tf.trainable_variables(scope='network')
         with tf.name_scope('output'):
