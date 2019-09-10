@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn import datasets
 
-from custom_envs.data.sequence import InMemorySequence
+from custom_envs.dataset import InMemoryDataSet
 from custom_envs.utils.utils_image import resize_array_many, convert_many
 from custom_envs.utils.utils_common import to_onehot
 from custom_envs.utils.utils_math import normalize
@@ -44,7 +44,7 @@ def load_emnist(name='emnist', kind='train'):
     return images, labels
 
 
-def load_data(name='iris', batch_size=None, num_of_labels=None):
+def load_data(name='iris', batch_size=32, num_of_labels=None):
     '''
     Load a data set.
 
@@ -107,6 +107,6 @@ def load_data(name='iris', batch_size=None, num_of_labels=None):
         labels, _ = to_onehot(labels, 2)
     else:
         raise RuntimeError('No such data set named: {}'.format(name))
-    sequence = InMemorySequence(features, labels, batch_size)
+    sequence = InMemoryDataSet(features, labels, batch_size)
 
     return sequence

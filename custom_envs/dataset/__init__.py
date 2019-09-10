@@ -1,3 +1,3 @@
 
-from custom_envs.data.sequence.dataset import DataSet, BatchType
-from custom_envs.data.sequence.inmemorydataset import InMemoryDataSet
+from custom_envs.dataset.dataset import DataSet, BatchType
+from custom_envs.dataset.inmemorydataset import InMemoryDataSet
