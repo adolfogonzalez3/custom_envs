@@ -6,9 +6,8 @@ import numpy as np
 from gym.spaces import Dict
 
 import custom_envs.utils.utils_env as utils_env
-from custom_envs import load_data
-from custom_envs.problems import get_problem
 from custom_envs.envs import BaseMultiEnvironment
+from custom_envs.problems import get_problem
 from custom_envs.utils.utils_common import History
 
 VersionType = namedtuple('VersionType', ['history', 'observation', 'action',
@@ -46,7 +45,7 @@ class MultiOptLRs(BaseMultiEnvironment):
         )
         result = utils_env.get_obs_version((self.model.size,), max_history, 3)
         obs_space, self.adjusted_history = result
-        act_space = utils_env.get_action_space_optlrs(0)
+        act_space = utils_env.get_action_space_optlrs(2)
 
         self.observation_space = Dict({
             MultiOptLRs.AGENT_FMT.format(i): obs_space
@@ -59,7 +58,10 @@ class MultiOptLRs(BaseMultiEnvironment):
         self.seed()
         self.max_history = max_history
         self.max_batches = max_batches
-        self.version = VersionType(3, 3, 0, 1)
+        self.version = VersionType(3, 3, 0, 6)
+
+    def __repr__(self):
+        return f'<MultiOptLRs({self.version})>'
 
     def base_reset(self):
         self.adjusted_history.reset()
@@ -69,7 +71,8 @@ class MultiOptLRs(BaseMultiEnvironment):
         self.history.append(losses=loss, gradients=grad, weights=weight)
         states = self.adjusted_history.build_multistate()
         states = {
-            MultiOptLRs.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS)
+            MultiOptLRs.AGENT_FMT.format(i):
+            np.clip(np.nan_to_num(list(v)), -BOUNDS, BOUNDS) - 1
             for i, v in enumerate(states)
         }
         return states
@@ -92,13 +95,14 @@ class MultiOptLRs(BaseMultiEnvironment):
         )
         state = self.adjusted_history.build_multistate()
         states = {
-            self.AGENT_FMT.format(i): np.clip(list(v), -BOUNDS, BOUNDS) - 1
+            self.AGENT_FMT.format(i):
+            np.clip(np.nan_to_num(list(v)), -BOUNDS, BOUNDS) - 1
             for i, v in enumerate(state)
         }
-        reward = utils_env.get_reward(loss, adj_loss, 6)
+        reward = utils_env.get_reward(loss, adj_loss, self.version.reward)
         reward = np.clip(reward, -BOUNDS, BOUNDS)
         terminal = self._terminal()
-        if not terminal and loss > 1e3:
+        if not terminal and loss > 1e4:
             terminal = True
             reward -= (self.max_batches - self.current_step)
         final_loss = None
@@ -119,8 +123,7 @@ class MultiOptLRs(BaseMultiEnvironment):
             'loss_mean': np.mean(self.history['losses']),
             'adjusted_loss': float(adj_loss),
             'adjusted_grad': np.mean(np.abs(adj_grad)),
-            'grad_diff': np.mean(np.abs(past_grads[0] - past_grads[1])),
-            'weights': weights
+            'grad_diff': np.mean(np.abs(past_grads[0] - past_grads[1]))
         }
         self.model.next()
         return states, reward, terminal, info
