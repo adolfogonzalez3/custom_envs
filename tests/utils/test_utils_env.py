@@ -114,7 +114,7 @@ def test_get_action_space_optlrs_v0():
     space = utils.get_action_space_optlrs(version=0)
     assert isinstance(space, gym.spaces.Box)
     assert np.all(space.low == -4.)
-    assert np.all(space.high == 4.)
+    assert np.all(space.high == 6.)
     assert space.dtype == np.float32
     assert space.shape == (1,)
 
