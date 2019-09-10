@@ -1,23 +1,33 @@
 '''Run an multi agent experiment.'''
-import os
-import logging
 import argparse
-from pathlib import Path
+import logging
+import os
 from functools import partial
+from itertools import count
+from pathlib import Path
 
 import gym
-import optuna
 import tensorflow as tf
-from tqdm import trange
-from stable_baselines.common.policies import MlpPolicy, MlpLstmPolicy
-from stable_baselines import PPO2, A2C
-from stable_baselines.common.misc_util import set_global_seeds
+from tqdm import tqdm
 
 import custom_envs.utils.utils_file as utils_file
+import optuna
 from custom_envs.utils.utils_logging import Monitor
 from custom_envs.vectorize.optvecenv import OptVecEnv
+from stable_baselines import A2C, PPO2
+from stable_baselines.common.misc_util import set_global_seeds
+from stable_baselines.common.policies import MlpPolicy
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_total_reward(environment):
+    '''
+    Get the total reward so far from training.
+
+    :param environment: () An environment wrapped in a Monitor Wrapper.
+    '''
+    return sum(sum(r) for r in environment.env_method('get_episode_rewards'))
 
 
 def run_agent(envs, parameters, trial):
@@ -27,9 +37,8 @@ def run_agent(envs, parameters, trial):
     set_global_seeds(parameters.setdefault('seed'))
     if parameters['alg'] == 'PPO':
         model = PPO2(
-            MlpLstmPolicy, dummy_env, gamma=parameters['gamma'],
-            learning_rate=parameters['learning_rate'], verbose=0,
-            nminibatches=2
+            MlpPolicy, dummy_env, gamma=parameters['gamma'],
+            learning_rate=parameters['learning_rate'], verbose=0
         )
     elif parameters['alg'] == 'A2C':
         model = A2C(
@@ -38,23 +47,20 @@ def run_agent(envs, parameters, trial):
         )
     try:
         timesteps = parameters['total_timesteps'] * dummy_env.agent_no_list[0]
-        number_of_updates = parameters['total_timesteps'] // 128
-        with trange(number_of_updates, leave=True) as progress:
+        with tqdm(count(), leave=True) as progress:
             progress = iter(progress)
 
             def callback(local_vars, global_vars):
                 if next(progress) % 100:
                     callback_env = local_vars['self'].env
-                    metric = sum(
-                        sum(r) for r in
-                        callback_env.env_method('get_episode_rewards')
-                    )
-                    trial.report(metric, local_vars['update'])
-                    #if trial.should_prune():
-                    #    raise optuna.structs.TrialPruned()
+                    get_total_reward(callback_env)
+                    trial.report(
+                        get_total_reward(callback_env), local_vars['update'])
+                    if trial.should_prune():
+                        raise optuna.structs.TrialPruned()
 
             model.learn(total_timesteps=timesteps, callback=callback)
-        return sum(sum(r) for r in dummy_env.env_method('get_episode_rewards'))
+        return get_total_reward(dummy_env)
     finally:
         dummy_env.close()
         model.save(str(path / 'model.pkl'))
@@ -69,28 +75,11 @@ def get_parameters(trial):
             'learning_rate', 1e-6, 1e-3
         )),
         'kwargs': {
-            # 6 points to search
-            # 'version': int(trial.suggest_int('version', 0, 5)),
-            # 4 points to search
-            # 'reward_version': 0,  # int(trial.suggest_int('reward_version', 0, 3)),
-            # 2 points to search
-            # 'action_version': int(trial.suggest_int('action_version', 0, 1)),
-            # 5 points to search
-            #'batch_size': int(trial.suggest_categorical(
-            #    'batch_size', [2**i for i in range(7, 12)]
-            #)),  # 4 points to search
-            # 'observation_version': int(trial.suggest_int(
-            #    'observation_version', 0, 3
-            # )),
             # 5 points to search
             'max_history': int(trial.suggest_discrete_uniform(
                 'max_history', 5, 25, 5
             )),
-            # 5 points to search
-            #'max_batches': int(trial.suggest_discrete_uniform(
-            #    'max_batches', 100, 500, 100
-            #))
-            'max_batches': 500
+            'max_batches': 100
         }
     }
     return parameters
@@ -100,13 +89,13 @@ def run_experiment(parameters, trial):
     '''Set up and run an experiment.'''
     parameters = parameters.copy()
     parameters.update(get_parameters(trial))
-    path = Path(parameters['path']) / str(trial.number)
-    path.mkdir()
-    parameters['path'] = str(path)
+    trial_path = Path(parameters['path'], str(trial.number))
+    trial_path.mkdir()
+    parameters['path'] = str(trial_path)
     parameters['commit'] = utils_file.get_commit_hash(Path(__file__).parent)
-    log_path = str(path / 'monitor_{:d}')
+    log_path = str(trial_path / 'monitor_{:d}')
     kwargs = parameters.setdefault('kwargs', {})
-    utils_file.save_json(parameters, path / 'parameters.json')
+    utils_file.save_json(parameters, trial_path / 'parameters.json')
     wrapped_envs = [
         partial(
             Monitor,
@@ -133,10 +122,10 @@ def main():
     parser.add_argument("--alg", help="The algorithm to use.", default='PPO')
     parser.add_argument("--env_name", help="The gamma to use.",
                         default='MultiOptLRs-v0')
-    parser.add_argument('--total_timesteps', default=int(1e5), type=int,
+    parser.add_argument('--total_timesteps', default=int(5e6), type=int,
                         help="Number of timesteps per training session")
-    parser.add_argument('--data_set', help="The data set to use.",
-                        default='iris')
+    parser.add_argument('--problem', help='The problem to optimize for.',
+                        default='nn')
     parser.add_argument('--trials', help="The number of trials to run.",
                         default=10, type=int)
     args = parser.parse_args()
@@ -145,7 +134,7 @@ def main():
     path = Path(parameters['path'])
     if not path.exists():
         path.mkdir()
-        parameters['kwargs'] = {'data_set': parameters['data_set']}
+        parameters['kwargs'] = {'problem': parameters['problem']}
         utils_file.save_json(parameters, path / 'parameters.json')
     else:
         if (path / 'study.db').exists():
@@ -155,14 +144,13 @@ def main():
             raise FileExistsError(('Directory already exists and is not a '
                                    'study.'))
     objective = partial(run_experiment, parameters)
-    storage = 'sqlite:///' + str(path / 'study.db')
+    storage = f'sqlite:///{path / "study.db"}'  # + str(path / 'study.db')
     study = optuna.create_study(
         study_name=str(path.name),
         storage=storage, load_if_exists=True,
         pruner=optuna.pruners.MedianPruner()
     )
     study.optimize(objective, n_trials=args.trials)
-
 
 
 if __name__ == '__main__':
