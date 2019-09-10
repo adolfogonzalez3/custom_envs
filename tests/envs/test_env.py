@@ -11,6 +11,7 @@ def test_step(environment_class):
     environ.reset()
     assert environ.current_step == 0
     action = environ.action_space.sample()
+    terminal = False
     for i in range(1, 10):
         state, reward, terminal, info = environ.step(action)
         assert environ.current_step == i
@@ -18,6 +19,8 @@ def test_step(environment_class):
         assert isinstance(reward, float)
         assert isinstance(terminal, bool)
         assert isinstance(info, dict)
+        if terminal:
+            break
 
 
 @pytest.mark.parametrize("environment_class", SINGLE_AGENT_ENVIRONMENTS)
