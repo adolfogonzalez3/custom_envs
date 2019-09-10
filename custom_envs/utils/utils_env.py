@@ -38,10 +38,10 @@ def get_obs_version(shape, max_history, version=0):
         history = History(max_history, gradients=shape)
         space = Box(low=-1e6, high=1e6, dtype=np.float32, shape=(max_history,))
     elif version == 5:
-        history = History(max_history, losses=(),
+        history = History(max_history, weights=shape, losses=(),
                           gradients=shape, actions=shape)
         space = Box(low=-1e6, high=1e6, dtype=np.float32,
-                    shape=(3*max_history,))
+                    shape=(4*max_history,))
     else:
         raise RuntimeError()
     return space, history
@@ -58,9 +58,11 @@ def get_action_space_optlrs(version=0):
     :return: (gym.Space) A space that inherits gym.Space.
     '''
     if version == 0:
-        space = Box(low=-4., high=4., dtype=np.float32, shape=(1,))
+        space = Box(low=-4., high=6., dtype=np.float32, shape=(1,))
     elif version == 1:
         space = Box(low=0., high=1e4, dtype=np.float32, shape=(1,))
+    elif version == 2:
+        space = Box(low=-1e3, high=1e4, dtype=np.float32, shape=(1,))
     else:
         raise RuntimeError()
     return space
@@ -114,6 +116,8 @@ def get_action_optlrs(action, version):
         action = action*1e-3
     elif version == 2:
         action = 2**action
+    elif version == 3:
+        action = np.clip((action + 1e3)*1e-6, 0, np.inf)
     else:
         raise RuntimeError()
     return action
