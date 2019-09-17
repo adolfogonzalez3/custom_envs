@@ -48,32 +48,21 @@ def train_model(parameters, trial):
     parameters = parameters.copy()
     path = Path(parameters['path'], str(trial.number))
     parameters['path'] = str(path)
-    batch_size = trial.suggest_categorical('batch_size',
-                                           [2**i for i in range(5, 12)])
     learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e0)
-    parameters.update({
-        'batch_size': batch_size, 'learning_rate': learning_rate
-    })
+    parameters.update({'learning_rate': learning_rate})
     sequence = load_data(parameters['data_set'])
-    features = sequence.features
-    labels = sequence.labels
-    layers = [features.shape[-1], labels.shape[-1]]
-    use_bias = True
+    layers = [sequence.feature_shape, 256, 256, sequence.target_shape]
     graph = tf.Graph()
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.9
     with graph.as_default():
-        target = tf.keras.layers.Input((1,))
-        model_in = tf.keras.layers.Input([layers[0]])
-        tensor = model_in
+        tensor = model_in = tf.keras.layers.Input([layers[0]])
         layers = [layers[0], layers[-1]]
         for layer in layers[1:-1]:
-            layer = tf.keras.layers.Dense(layer, use_bias=use_bias,
-                                          activation='relu')
+            layer = tf.keras.layers.Dense(layer, activation='relu')
             tensor = layer(tensor)
-        layer = tf.keras.layers.Dense(layers[-1], use_bias=use_bias,
-                                      activation='softmax')
+        layer = tf.keras.layers.Dense(layers[-1], activation='softmax')
         tensor = layer(tensor)
         model = tf.keras.Model(inputs=model_in, outputs=tensor)
         callbacks = [CustomCallback(trial, 'loss')]
@@ -82,9 +71,10 @@ def train_model(parameters, trial):
                 model.compile(tf.train.AdamOptimizer(learning_rate),
                               loss='categorical_crossentropy',
                               metrics=['accuracy'])
-                model.fit(features, labels, epochs=parameters['total_epochs'],
-                          shuffle=True, batch_size=batch_size, verbose=0,
-                          callbacks=callbacks)
+                model.fit_generator(
+                    sequence, epochs=parameters['total_epochs'], verbose=0,
+                    callbacks=callbacks
+                )
             finally:
                 path.mkdir()
                 utils_file.save_json(parameters, path / 'parameters.json')
