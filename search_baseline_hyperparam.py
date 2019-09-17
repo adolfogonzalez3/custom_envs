@@ -51,7 +51,7 @@ def train_model(parameters, trial):
     learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e0)
     parameters.update({'learning_rate': learning_rate})
     sequence = load_data(parameters['data_set'])
-    layers = [sequence.feature_shape, 256, 256, sequence.target_shape]
+    layers = [sequence.feature_shape[0], 256, 256, sequence.target_shape[0]]
     graph = tf.Graph()
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
